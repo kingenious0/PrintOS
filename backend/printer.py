@@ -23,16 +23,30 @@ def is_mock_mode() -> bool:
     return MOCK_MODE
 
 def get_available_printers() -> list:
-    """Lists all installed printer names on Windows."""
+    """Lists all installed printer names on Windows instantly via winreg."""
     printers = []
     if platform.system() == "Windows":
         try:
-            cmd = 'powershell -NoProfile -Command "Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name"'
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=4)
-            if res.returncode == 0:
-                printers = [p.strip() for p in res.stdout.splitlines() if p.strip()]
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Print\Printers")
+            i = 0
+            while True:
+                try:
+                    printers.append(winreg.EnumKey(key, i))
+                    i += 1
+                except OSError:
+                    break
+            winreg.CloseKey(key)
         except Exception:
             pass
+        if not printers:
+            try:
+                cmd = 'powershell -NoProfile -Command "Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name"'
+                res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=4)
+                if res.returncode == 0:
+                    printers = [p.strip() for p in res.stdout.splitlines() if p.strip()]
+            except Exception:
+                pass
     return printers
 
 
