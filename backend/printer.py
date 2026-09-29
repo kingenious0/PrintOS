@@ -22,17 +22,42 @@ def set_mock_mode(enabled: bool):
 def is_mock_mode() -> bool:
     return MOCK_MODE
 
+def get_available_printers() -> list:
+    """Lists all installed printer names on Windows."""
+    printers = []
+    if platform.system() == "Windows":
+        try:
+            cmd = 'powershell -NoProfile -Command "Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name"'
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=4)
+            if res.returncode == 0:
+                printers = [p.strip() for p in res.stdout.splitlines() if p.strip()]
+        except Exception:
+            pass
+    return printers
+
+
 def get_system_default_printer() -> Optional[str]:
-    """Detect default printer on Windows, macOS, or Linux."""
+    """
+    Detects the best printer to use:
+    1. If PRINTOS_TARGET_PRINTER env var is set, use it.
+    2. Check for physical Canon printer (e.g. LBP253, Canon Laser).
+    3. Use Windows system default printer.
+    4. Fall back to first available printer.
+    """
+    custom_target = os.environ.get("PRINTOS_TARGET_PRINTER")
+    if custom_target:
+        return custom_target
+
     system = platform.system()
     try:
         if system == "Windows":
-            try:
-                import win32print # type: ignore
-                return win32print.GetDefaultPrinter()
-            except Exception:
-                pass
-            # Fast, instant Windows Registry lookup (0ms overhead)
+            all_printers = get_available_printers()
+            # Prioritize Canon printer if present
+            canon_matches = [p for p in all_printers if "canon" in p.lower() or "lbp" in p.lower()]
+            if canon_matches:
+                return canon_matches[0]
+
+            # Fast Windows Registry lookup for default printer
             try:
                 import winreg
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows NT\CurrentVersion\Windows")
@@ -42,7 +67,10 @@ def get_system_default_printer() -> Optional[str]:
                     return printer_name
             except Exception:
                 pass
-            return "Canon Laser LBP6030 (USB Attached)"
+
+            if all_printers:
+                return all_printers[0]
+            return "Canon Laser Printer (Default)"
         elif system in ("Darwin", "Linux"):
             cmd = "lpstat -d"
             res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=3)
@@ -51,7 +79,7 @@ def get_system_default_printer() -> Optional[str]:
             return "cups-default-printer"
     except Exception as e:
         logger.warning(f"Could not query default printer: {e}")
-    return "Canon Laser Kiosk Printer (Default)"
+    return "Canon Laser Printer (Default)"
 
 
 def check_printer_health() -> Dict[str, Any]:
@@ -155,18 +183,36 @@ def print_document(
 
     try:
         if system == "Windows":
-            # Attempt win32api ShellExecute 'print' verb
+            # Attempt win32api ShellExecute 'printto' or 'print' verb
+            dispatched = False
             try:
                 import win32api # type: ignore
-                win32api.ShellExecute(0, "print", str(path), None, ".", 0)
-                logger.info(f"Windows ShellExecute sent print job for: {path.name}")
+                try:
+                    # 'printto' allows specifying target printer explicitly
+                    win32api.ShellExecute(0, "printto", str(path), f'"{printer_name}"', ".", 0)
+                    dispatched = True
+                    logger.info(f"win32api printto dispatched to '{printer_name}' for: {path.name}")
+                except Exception:
+                    win32api.ShellExecute(0, "print", str(path), None, ".", 0)
+                    dispatched = True
+                    logger.info(f"win32api default print dispatched for: {path.name}")
             except ImportError:
-                # Fallback to PowerShell Start-Process with Print verb
-                cmd = f'powershell -NoProfile -Command "Start-Process -FilePath \'{str(path)}\' -Verb Print"'
+                pass
+
+            if not dispatched:
+                # PowerShell fallback: Start-Process with PrintTo or Print verb
+                if printer_name:
+                    cmd = f'powershell -NoProfile -Command "Start-Process -FilePath \'{str(path)}\' -Verb PrintTo -ArgumentList \'\\"{printer_name}\\"\'"'
+                else:
+                    cmd = f'powershell -NoProfile -Command "Start-Process -FilePath \'{str(path)}\' -Verb Print"'
                 res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
                 if res.returncode != 0:
-                    raise RuntimeError(f"PowerShell print invocation failed: {res.stderr}")
-                logger.info(f"PowerShell Print verb invoked for: {path.name}")
+                    # Fallback to standard Print verb
+                    cmd_fallback = f'powershell -NoProfile -Command "Start-Process -FilePath \'{str(path)}\' -Verb Print"'
+                    res_fb = subprocess.run(cmd_fallback, shell=True, capture_output=True, text=True, timeout=10)
+                    if res_fb.returncode != 0:
+                        raise RuntimeError(f"PowerShell print invocation failed: {res_fb.stderr}")
+                logger.info(f"PowerShell Print verb dispatched for: {path.name} to {printer_name}")
 
         elif system in ("Darwin", "Linux"):
             # Use CUPS lp command

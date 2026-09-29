@@ -1,4 +1,5 @@
 import os
+import sys
 import uuid
 import math
 import random
@@ -7,6 +8,11 @@ import socket
 import logging
 from pathlib import Path
 from typing import Optional
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+BACKEND_DIR = Path(__file__).resolve().parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -21,8 +27,6 @@ import usb_manager
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [SERVER] %(message)s")
 logger = logging.getLogger("PrintOS.Server")
-
-BASE_DIR = Path(__file__).resolve().parent.parent
 STORAGE_DIR = BASE_DIR / "storage"
 KIOSK_DIR = BASE_DIR / "kiosk_ui"
 PWA_DIR = BASE_DIR / "pwa"
@@ -172,6 +176,41 @@ async def browse_usb_drive(drive: str, folder: str = ""):
     }
 
 
+@app.get("/api/usb/inspect-file")
+async def inspect_usb_file(drive: str, rel_path: str):
+    """
+    Inspects a printable document (PDF or DOCX) on the USB drive to return detected page count,
+    file size, and pricing unit rates prior to staging.
+    """
+    source_path = Path(drive).resolve() / rel_path
+    if not source_path.exists() or not source_path.is_file():
+        raise HTTPException(status_code=404, detail="File not found on USB drive.")
+
+    file_size = source_path.stat().st_size
+    ext = source_path.suffix.lower()
+    if ext == ".pdf":
+        detected_pages = count_pdf_pages(source_path)
+    elif ext in (".docx", ".doc"):
+        detected_pages = usb_manager.count_docx_pages(source_path)
+    else:
+        detected_pages = 1
+    page_count = detected_pages if detected_pages > 0 else 1
+
+    return {
+        "file_name": source_path.name,
+        "rel_path": rel_path,
+        "drive": drive,
+        "file_size_bytes": file_size,
+        "size_formatted": usb_manager.format_bytes(file_size),
+        "page_count": page_count,
+        "is_docx": ext in (".docx", ".doc"),
+        "rates": {
+            "BW": 0.50,
+            "COLOR": 1.00
+        }
+    }
+
+
 class USBStageRequest(BaseModel):
     drive: str
     rel_path: str
@@ -186,7 +225,7 @@ async def stage_usb_file(payload: USBStageRequest):
     """
     Direct USB Staging:
     Copies document directly from physical flash drive into kiosk scratch buffer,
-    counts pages, and generates a staged job for immediate release.
+    counts pages (PDF or DOCX), and generates a staged job for immediate release.
     """
     source_path = Path(payload.drive).resolve() / payload.rel_path
     if not source_path.exists() or not source_path.is_file():
@@ -204,7 +243,13 @@ async def stage_usb_file(payload: USBStageRequest):
         raise HTTPException(status_code=500, detail=f"Failed to copy file from USB: {str(err)}")
 
     file_size = saved_path.stat().st_size
-    detected_pages = count_pdf_pages(saved_path)
+    ext = saved_path.suffix.lower()
+    if ext == ".pdf":
+        detected_pages = count_pdf_pages(saved_path)
+    elif ext in (".docx", ".doc"):
+        detected_pages = usb_manager.count_docx_pages(saved_path)
+    else:
+        detected_pages = 1
     page_count = detected_pages if detected_pages > 0 else 1
 
     copies = max(1, payload.copies)
@@ -288,7 +333,13 @@ async def stage_print_job(
     file_size = len(file_bytes)
 
     # Validate actual page count
-    detected_pages = count_pdf_pages(saved_path)
+    ext = saved_path.suffix.lower()
+    if ext == ".pdf":
+        detected_pages = count_pdf_pages(saved_path)
+    elif ext in (".docx", ".doc"):
+        detected_pages = usb_manager.count_docx_pages(saved_path)
+    else:
+        detected_pages = 1
     page_count = detected_pages if detected_pages > 0 else (pages or 1)
 
     # Compute sheet count:
@@ -398,6 +449,99 @@ async def lookup_job(code: str):
             "printer_detail": printer_health.get("detail", "Ready")
         }
     }
+
+
+class JobConfigureRequest(BaseModel):
+    copies: int = 1
+    color: str = "BW"
+    duplex: str = "SIMPLEX"
+    phone: Optional[str] = ""
+
+
+@app.post("/api/jobs/{job_id}/configure")
+async def configure_job(job_id: str, payload: JobConfigureRequest):
+    """
+    Updates print configuration parameters for a staged job:
+    copies, color mode (BW vs COLOR), and duplex mode (SIMPLEX vs DUPLEX).
+    Recalculates sheet count and total price in GHS.
+    """
+    job = database.get_job_by_id(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    if job["status"] != "STAGED":
+        raise HTTPException(status_code=400, detail=f"Cannot reconfigure job with status '{job['status']}'.")
+
+    page_count = job["page_count"]
+    copies = max(1, payload.copies)
+    color = "COLOR" if payload.color.upper() in ("COLOR", "COLOUR") else "BW"
+    duplex = "DUPLEX" if payload.duplex.upper() == "DUPLEX" else "SIMPLEX"
+
+    if duplex == "DUPLEX":
+        sheets_per_copy = math.ceil(page_count / 2)
+    else:
+        sheets_per_copy = page_count
+    sheet_count = sheets_per_copy * copies
+
+    rate_per_sheet = 1.00 if color == "COLOR" else 0.50
+    total_price = round(sheet_count * rate_per_sheet, 2)
+
+    phone = payload.phone if payload.phone is not None else job.get("phone_number", "")
+
+    database.update_job_config(
+        job_id=job_id,
+        copies=copies,
+        color_mode=color,
+        duplex_mode=duplex,
+        sheet_count=sheet_count,
+        total_price=total_price,
+        phone_number=phone
+    )
+
+    updated_job = database.get_job_by_id(job_id)
+    raw_code = updated_job["pickup_code"]
+    formatted_code = f"{raw_code[:3]}-{raw_code[3:]}" if len(raw_code) == 6 else raw_code
+
+    kiosk_state = database.get_kiosk_state()
+    paper_rem = kiosk_state.get("paper_sheets_remaining", 0)
+    paper_ok = paper_rem >= sheet_count
+    printer_health = printer.check_printer_health()
+
+    return {
+        "status": "STAGED",
+        "job": {
+            **updated_job,
+            "formatted_code": formatted_code
+        },
+        "preflight": {
+            "can_print": paper_ok and printer_health["online"],
+            "paper_available": paper_rem,
+            "sheets_needed": sheet_count,
+            "paper_ok": paper_ok,
+            "printer_online": printer_health["online"],
+            "printer_detail": printer_health.get("detail", "Ready")
+        }
+    }
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_job_endpoint(job_id: str):
+    """Cancels a staged job and cleans up temporary storage if not already printed."""
+    job = database.get_job_by_id(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    if job["status"] == "COMPLETED":
+        raise HTTPException(status_code=400, detail="Cannot cancel completed job.")
+
+    database.cancel_job(job_id)
+    if job.get("file_path"):
+        try:
+            printer.secure_cleanup(job["file_path"])
+        except Exception:
+            pass
+
+    return {"success": True, "message": "Job cancelled and temporary file cleaned."}
 
 
 class PayRequest(BaseModel):
@@ -515,24 +659,24 @@ async def root_portal(request: Request):
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>PrintOS V1 - Autonomous Printing System</title>
+      <title>PrintOS V1 - Commercial Kiosk & Staging Portal</title>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
       <style>
         :root {{
-          --bg-dark: #0a0e17;
-          --card-bg: rgba(18, 24, 38, 0.85);
-          --accent-cyan: #00f2fe;
-          --accent-blue: #4facfe;
-          --accent-green: #10b981;
-          --text-primary: #f8fafc;
-          --text-secondary: #94a3b8;
-          --border: rgba(255, 255, 255, 0.08);
+          --bg-main: #F8FAFC;
+          --card-bg: #FFFFFF;
+          --primary: #2563EB;
+          --primary-hover: #1D4ED8;
+          --emerald: #059669;
+          --text-primary: #0F172A;
+          --text-secondary: #475569;
+          --border: #E2E8F0;
         }}
         * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }}
         body {{
-          background: radial-gradient(circle at 50% 0%, #172554 0%, #0a0e17 75%);
+          background-color: var(--bg-main);
           color: var(--text-primary);
           min-height: 100vh;
           display: flex;
@@ -541,45 +685,39 @@ async def root_portal(request: Request):
           padding: 24px;
         }}
         .portal-container {{
-          max-width: 900px;
+          max-width: 920px;
           width: 100%;
           background: var(--card-bg);
           border: 1px solid var(--border);
           border-radius: 28px;
           padding: 48px;
-          backdrop-filter: blur(20px);
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 242, 254, 0.1);
+          box-shadow: 0 10px 35px -5px rgba(15, 23, 42, 0.08);
         }}
         .header {{ text-align: center; margin-bottom: 40px; }}
         .badge {{
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 16px;
-          background: rgba(0, 242, 254, 0.1);
-          border: 1px solid rgba(0, 242, 254, 0.25);
+          padding: 6px 18px;
+          background: #EFF6FF;
+          border: 1px solid #BFDBFE;
           border-radius: 100px;
-          color: var(--accent-cyan);
+          color: var(--primary);
           font-size: 13px;
           font-weight: 700;
-          letter-spacing: 1px;
+          letter-spacing: 0.8px;
           text-transform: uppercase;
           margin-bottom: 16px;
         }}
         .badge .dot {{
           width: 8px;
           height: 8px;
-          background: var(--accent-green);
+          background: var(--emerald);
           border-radius: 50%;
-          box-shadow: 0 0 10px var(--accent-green);
         }}
         h1 {{ font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }}
-        h1 span {{
-          background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }}
-        p.subtitle {{ color: var(--text-secondary); font-size: 18px; max-width: 600px; margin: 0 auto; }}
+        h1 span {{ color: var(--primary); }}
+        p.subtitle {{ color: var(--text-secondary); font-size: 17px; max-width: 600px; margin: 0 auto; line-height: 1.5; }}
         .grid {{
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -587,8 +725,8 @@ async def root_portal(request: Request):
           margin-top: 36px;
         }}
         .portal-card {{
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid var(--border);
+          background: #FFFFFF;
+          border: 2px solid var(--border);
           border-radius: 20px;
           padding: 32px;
           text-decoration: none;
@@ -596,43 +734,41 @@ async def root_portal(request: Request):
           display: flex;
           flex-direction: column;
           justify-content: space-between;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          position: relative;
-          overflow: hidden;
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
         }}
         .portal-card:hover {{
-          transform: translateY(-4px);
-          border-color: var(--accent-cyan);
-          background: rgba(255, 255, 255, 0.06);
-          box-shadow: 0 20px 30px -10px rgba(0, 242, 254, 0.15);
+          transform: translateY(-3px);
+          border-color: var(--primary);
+          box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08);
         }}
         .card-icon {{
-          width: 56px;
-          height: 56px;
+          width: 58px;
+          height: 58px;
           border-radius: 16px;
-          background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(79, 172, 254, 0.15));
-          border: 1px solid rgba(0, 242, 254, 0.3);
+          background: #EFF6FF;
+          border: 1px solid #BFDBFE;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 26px;
+          font-size: 28px;
           margin-bottom: 20px;
         }}
-        .card-title {{ font-size: 24px; font-weight: 700; margin-bottom: 8px; }}
+        .card-title {{ font-size: 22px; font-weight: 800; margin-bottom: 8px; color: var(--text-primary); }}
         .card-desc {{ color: var(--text-secondary); font-size: 15px; line-height: 1.5; margin-bottom: 24px; }}
         .card-btn {{
           display: flex;
           align-items: center;
           gap: 8px;
-          font-weight: 700;
+          font-weight: 800;
           font-size: 15px;
-          color: var(--accent-cyan);
+          color: var(--primary);
         }}
         .info-bar {{
           margin-top: 36px;
           padding: 16px 24px;
-          background: rgba(0, 0, 0, 0.3);
-          border-radius: 14px;
+          background: #F8FAFC;
+          border-radius: 16px;
           border: 1px solid var(--border);
           display: flex;
           flex-wrap: wrap;
@@ -644,19 +780,21 @@ async def root_portal(request: Request):
         .info-item {{ display: flex; align-items: center; gap: 8px; }}
         .info-item code {{
           font-family: 'JetBrains Mono', monospace;
-          background: rgba(255, 255, 255, 0.08);
-          padding: 3px 8px;
+          background: #FFFFFF;
+          border: 1px solid var(--border);
+          padding: 4px 10px;
           border-radius: 6px;
-          color: #fff;
+          color: var(--primary);
+          font-weight: 700;
         }}
       </style>
     </head>
     <body>
       <div class="portal-container">
         <div class="header">
-          <div class="badge"><span class="dot"></span> Autonomous Kiosk Lab Active</div>
+          <div class="badge"><span class="dot"></span> Commercial Kiosk Lab Active</div>
           <h1>Print<span>OS</span> V1</h1>
-          <p class="subtitle">Autonomous, unattended self-service printing kiosk system with zero-queue staging and Mobile Money integration.</p>
+          <p class="subtitle">Autonomous, unattended self-service printing kiosk system with anti-glare POS interface, 60s idle timeout, and Mobile Money release pipeline.</p>
         </div>
 
         <div class="grid">
@@ -665,7 +803,7 @@ async def root_portal(request: Request):
             <div>
               <div class="card-icon">🖥️</div>
               <h2 class="card-title">Kiosk Touchscreen UI</h2>
-              <p class="card-desc">High-contrast ATM-style touch interface with built-in numeric keypad, pre-flight hardware monitor, and Paystack release flow.</p>
+              <p class="card-desc">High-contrast ATM-style touch interface with large numeric keypad, pre-flight hardware monitor, USB configuration drawer, and Paystack release flow.</p>
             </div>
             <div class="card-btn">Launch Kiosk Terminal &rarr;</div>
           </a>
@@ -683,15 +821,15 @@ async def root_portal(request: Request):
 
         <div class="info-bar">
           <div class="info-item">
-            <span>Local Network Wi-Fi IP:</span>
+            <span>Local Wi-Fi IP:</span>
             <code>{local_ip}:8000</code>
           </div>
           <div class="info-item">
-            <span>Hardware Status:</span>
-            <code id="hw-status">Ready (Mock Spooler Safe)</code>
+            <span>Station Status:</span>
+            <code id="hw-status">Ready (Virtual Spooler Safe)</code>
           </div>
           <div class="info-item">
-            <span>Phone Upload Portal:</span>
+            <span>Walk-In Portal:</span>
             <code>http://{local_ip}:8000/upload</code>
           </div>
         </div>

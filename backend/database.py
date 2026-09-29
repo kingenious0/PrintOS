@@ -140,6 +140,44 @@ def update_job_status(job_id: str, status: str, paystack_ref: Optional[str] = No
     return affected
 
 
+def update_job_config(
+    job_id: str,
+    copies: int,
+    color_mode: str,
+    duplex_mode: str,
+    sheet_count: int,
+    total_price: float,
+    phone_number: Optional[str] = None
+) -> bool:
+    conn = get_connection()
+    cursor = conn.cursor()
+    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    if phone_number is not None:
+        cursor.execute(
+            """UPDATE jobs SET 
+                copies = ?, color_mode = ?, duplex_mode = ?, 
+                sheet_count = ?, total_price = ?, phone_number = ?, updated_at = ?
+            WHERE id = ?""",
+            (copies, color_mode, duplex_mode, sheet_count, total_price, phone_number, now_str, job_id)
+        )
+    else:
+        cursor.execute(
+            """UPDATE jobs SET 
+                copies = ?, color_mode = ?, duplex_mode = ?, 
+                sheet_count = ?, total_price = ?, updated_at = ?
+            WHERE id = ?""",
+            (copies, color_mode, duplex_mode, sheet_count, total_price, now_str, job_id)
+        )
+    affected = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return affected
+
+
+def cancel_job(job_id: str) -> bool:
+    return update_job_status(job_id, "CANCELLED")
+
+
 def get_kiosk_state(kiosk_id: str = "kiosk-01") -> Dict[str, Any]:
     conn = get_connection()
     cursor = conn.cursor()

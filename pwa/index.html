@@ -3,255 +3,343 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0a0e17">
+  <meta name="theme-color" content="#F8FAFC">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>PrintOS — Stage Your Print Job</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>PrintOS — Stage Your Campus Print Job</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="pwa.css">
+  <link rel="stylesheet" href="pwa.css?v=30">
   
-  <!-- CDN PDF-Lib for instant client-side page extraction with fallback -->
+  <!-- PDF-Lib for instant client-side page detection -->
   <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
 </head>
 <body>
-  <div class="app-container">
+  
+  <div class="pwa-app-wrapper">
     
-    <!-- Top Header -->
-    <header class="app-header">
-      <div class="brand">
-        <div class="logo-badge">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Clean, Non-Overlapping Header -->
+    <header class="pwa-header">
+      <div class="header-brand">
+        <div class="brand-logo-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 6 2 18 2 18 9"></polyline>
             <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
             <rect x="6" y="14" width="12" height="8"></rect>
           </svg>
         </div>
-        <div>
-          <h1 class="brand-title">Print<span>OS</span></h1>
-          <p class="brand-tagline">Autonomous Campus Printing</p>
-        </div>
+        <span class="brand-name">Print<strong>OS</strong></span>
       </div>
-      
-      <div class="kiosk-status-pill" id="kiosk-status-pill">
-        <span class="status-dot"></span>
-        <span id="kiosk-status-text">Kiosk #01 Ready</span>
+
+      <div class="header-status">
+        <div class="kiosk-status-pill" id="kiosk-status-badge">
+          <span class="status-dot"></span>
+          <span id="kiosk-status-text">Kiosk #01 (500 Sheets)</span>
+        </div>
       </div>
     </header>
 
-    <!-- Main Staging Card -->
-    <main class="main-content">
-      
-      <!-- Free Staging Hero Banner -->
-      <div class="free-banner">
-        <div class="banner-icon">⚡</div>
-        <div class="banner-text">
-          <strong>Zero Upfront Charge</strong>
-          <p>Stage document free. Pay via MoMo only when standing at the kiosk.</p>
-        </div>
+    <!-- Subtle 3-Step Progress Indicator -->
+    <nav class="wizard-stepper-bar" aria-label="Order Progress">
+      <div class="step-item active" id="step-nav-1">
+        <span class="step-num">1</span>
+        <span class="step-title">Upload</span>
       </div>
+      <div class="step-connector" id="step-conn-1"></div>
+      <div class="step-item" id="step-nav-2">
+        <span class="step-num">2</span>
+        <span class="step-title">Options</span>
+      </div>
+      <div class="step-connector" id="step-conn-2"></div>
+      <div class="step-item" id="step-nav-3">
+        <span class="step-num">3</span>
+        <span class="step-title">Pickup Code</span>
+      </div>
+    </nav>
 
-      <!-- File Upload Zone -->
-      <section class="section-card upload-section">
-        <div class="section-label">1. Choose Document (PDF)</div>
-        
-        <div class="drop-zone" id="drop-zone">
-          <input type="file" id="file-input" accept="application/pdf" class="file-hidden-input">
-          
-          <div class="drop-zone-idle" id="drop-zone-idle">
-            <div class="upload-icon-circle">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-            </div>
-            <p class="upload-main-text">Tap to select or drop PDF</p>
-            <p class="upload-sub-text">Assignment, slides, report (Max 50MB)</p>
+    <!-- Main Wizard Screen Container -->
+    <main class="wizard-card-container">
+
+      <!-- =================================================================== -->
+      <!-- SCREEN 1: SELECT & UPLOAD DOCUMENT                                  -->
+      <!-- =================================================================== -->
+      <section class="wizard-step-screen active" id="screen-step-1">
+        <div class="screen-content">
+          <div class="screen-heading">
+            <h1 class="screen-title">Upload Document</h1>
+            <p class="screen-subtitle">Stage free. Pay via MoMo at the kiosk.</p>
           </div>
 
-          <div class="file-selected-card" id="file-selected-card" style="display: none;">
-            <div class="pdf-icon">PDF</div>
-            <div class="file-info">
-              <div class="file-name" id="file-name-display">assignment.pdf</div>
-              <div class="file-meta">
-                <span id="file-size-display">1.4 MB</span> &bull; 
-                <span class="page-badge" id="detected-pages-badge">Detecting pages...</span>
+          <!-- Dropzone Card -->
+          <div class="drop-zone" id="drop-zone">
+            <input type="file" id="file-input" accept=".pdf,application/pdf,.docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword" class="hidden-file-input">
+            
+            <!-- Idle Upload Prompt -->
+            <div class="drop-idle-state" id="drop-zone-idle">
+              <div class="upload-icon-circle">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </div>
+              <p class="upload-primary-text">Tap to select or drop file here</p>
+              <p class="upload-secondary-text">PDF, DOCX, DOC &bull; Up to 50MB</p>
+            </div>
+
+            <!-- Active Selected File Display Inside Dropzone -->
+            <div class="drop-active-state" id="file-selected-card" style="display: none;">
+              <div class="file-icon-badge" id="file-type-badge">PDF</div>
+              <div class="file-info-col">
+                <div class="file-title-text" id="file-name-display">document.pdf</div>
+                <div class="file-meta-row">
+                  <span id="file-size-display">1.4 MB</span>
+                  <span class="meta-dot">&bull;</span>
+                  <span class="pages-badge" id="detected-pages-badge">Detecting pages...</span>
+                </div>
+              </div>
+              <button type="button" class="btn-change-file" id="btn-change-file">Replace</button>
+            </div>
+          </div>
+
+          <!-- Instant File Summary Card (Shown once file is selected) -->
+          <div class="file-summary-card" id="file-summary-card" style="display: none;">
+            <div class="summary-card-header">
+              <div class="ready-badge">
+                <span class="check-icon">✓</span>
+                <span>Document Ready</span>
+              </div>
+              <span class="parse-speed">Instant parse</span>
+            </div>
+            <div class="summary-details-grid">
+              <div class="detail-item">
+                <span class="label">Pages</span>
+                <strong class="value highlight" id="summary-page-count">-</strong>
+              </div>
+              <div class="detail-item">
+                <span class="label">Format</span>
+                <strong class="value" id="summary-format">-</strong>
+              </div>
+              <div class="detail-item">
+                <span class="label">Size</span>
+                <strong class="value" id="summary-size">-</strong>
               </div>
             </div>
-            <button type="button" class="btn-change-file" id="btn-change-file">Change</button>
           </div>
+
+          <!-- Zero Upfront Charge Strip -->
+          <div class="trust-note-strip">
+            <span class="trust-icon">💡</span>
+            <span class="trust-text"><strong>No card or deposit needed.</strong> Your pickup code holds your job securely in campus queue for 24 hours.</span>
+          </div>
+        </div>
+
+        <!-- Sticky Bottom Shelf: Screen 1 Next Action -->
+        <div class="sticky-action-shelf">
+          <button type="button" class="btn-action-primary" id="btn-to-step-2" disabled>
+            <span class="btn-text">Continue to Print Options &rarr;</span>
+          </button>
         </div>
       </section>
 
-      <!-- Print Parameters -->
-      <section class="section-card">
-        <div class="section-label">2. Print Parameters</div>
+      <!-- =================================================================== -->
+      <!-- SCREEN 2: PRINT PARAMETERS                                          -->
+      <!-- =================================================================== -->
+      <section class="wizard-step-screen" id="screen-step-2" style="display: none;">
+        <div class="screen-content">
+          
+          <!-- Top Navigation Header with Back Button & Active Document Pill -->
+          <div class="screen-top-bar">
+            <button type="button" class="btn-back-link" id="btn-back-to-step-1">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+              <span>Change Document</span>
+            </button>
+            <div class="active-file-pill" id="screen2-file-pill">
+              <span class="file-pill-icon">📄</span>
+              <span class="file-pill-text" id="screen2-file-text">document.pdf (4 pages)</span>
+            </div>
+          </div>
 
-        <!-- Copies Stepper -->
-        <div class="control-row">
-          <div class="control-meta">
-            <span class="control-title">Number of Copies</span>
-            <span class="control-subtitle">Physical sets to print</span>
+          <div class="options-group-card">
+            
+            <!-- Control 1: Copies Stepper -->
+            <div class="option-row">
+              <div class="option-label-block">
+                <span class="option-title">Number of Copies</span>
+                <span class="option-hint">Complete physical print sets</span>
+              </div>
+              <div class="stepper-box">
+                <button type="button" class="step-btn" id="btn-copy-minus" aria-label="Decrease copies">&minus;</button>
+                <span class="step-count" id="copies-display">1</span>
+                <button type="button" class="step-btn" id="btn-copy-plus" aria-label="Increase copies">&plus;</button>
+              </div>
+            </div>
+
+            <div class="divider-line"></div>
+
+            <!-- Control 2: Color Mode Selector -->
+            <div class="option-block">
+              <div class="option-label-block">
+                <span class="option-title">Color Mode</span>
+                <span class="option-hint">Black & White is standard for assignments & slides</span>
+              </div>
+              <div class="pill-group" id="color-toggle">
+                <button type="button" class="pill-btn active" data-color="BW">
+                  <span class="pill-label">⚫ Black & White</span>
+                  <span class="pill-price">GH₵ 0.50</span>
+                </button>
+                <button type="button" class="pill-btn" data-color="COLOR">
+                  <span class="pill-label">🎨 Full Color</span>
+                  <span class="pill-price">GH₵ 1.00</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="divider-line"></div>
+
+            <!-- Control 3: Page Layout (Duplex) -->
+            <div class="option-block">
+              <div class="option-label-block">
+                <span class="option-title">Page Layout (Sides)</span>
+                <span class="option-hint">Double-sided prints save 50% physical paper</span>
+              </div>
+              <div class="pill-group" id="duplex-toggle">
+                <button type="button" class="pill-btn active" data-duplex="SIMPLEX">
+                  <span class="pill-label">📄 Single-Sided</span>
+                  <span class="pill-price">1 sheet / page</span>
+                </button>
+                <button type="button" class="pill-btn" data-duplex="DUPLEX">
+                  <span class="pill-label">📑 Double-Sided</span>
+                  <span class="pill-price eco-tag">Save 50% Paper</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="divider-line"></div>
+
+            <!-- Control 4: Mobile Money Phone Input -->
+            <div class="option-block">
+              <label for="phone-input" class="option-title">Mobile Money Phone Number (Optional)</label>
+              <span class="option-hint">Auto-fills your USSD prompt at the kiosk terminal</span>
+              <div class="phone-input-box">
+                <span class="phone-prefix">🇬🇭 +233</span>
+                <input type="tel" id="phone-input" placeholder="024 123 4567" class="phone-input-field" maxlength="15">
+              </div>
+            </div>
+
           </div>
-          <div class="stepper">
-            <button type="button" class="btn-step" id="btn-copy-minus">&minus;</button>
-            <span class="stepper-val" id="copies-display">1</span>
-            <button type="button" class="btn-step" id="btn-copy-plus">&plus;</button>
-          </div>
+
         </div>
 
-        <hr class="divider">
+        <!-- Sticky Bottom Action Bar with Dynamic Pricing & Action -->
+        <div class="sticky-action-shelf screen2-shelf">
+          <div class="shelf-summary-col">
+            <span class="shelf-calc-label">Total to Pay at Kiosk</span>
+            <div class="shelf-price-row">
+              <span class="shelf-currency">GH₵</span>
+              <span class="shelf-amount" id="total-price-display">0.00</span>
+            </div>
+            <span class="shelf-sheets-sub" id="summary-sheets-sub">0 sheets needed</span>
+          </div>
 
-        <!-- Color Mode Segmented Control -->
-        <div class="control-group">
-          <div class="control-meta-block">
-            <span class="control-title">Color Mode</span>
-            <span class="control-subtitle">Black & White saves money</span>
-          </div>
-          <div class="segmented-control" id="color-toggle">
-            <button type="button" class="seg-btn active" data-color="BW">
-              <span class="seg-icon">⚫</span>
-              <span class="seg-title">Black & White</span>
-              <span class="seg-rate">GH₵ 0.50 / sheet</span>
-            </button>
-            <button type="button" class="seg-btn" data-color="COLOR">
-              <span class="seg-icon">🎨</span>
-              <span class="seg-title">Full Color</span>
-              <span class="seg-rate">GH₵ 1.00 / sheet</span>
-            </button>
-          </div>
+          <button type="button" class="btn-action-primary shelf-cta-btn" id="btn-stage-job">
+            <span class="btn-text">Get Pickup Code &rarr;</span>
+            <span class="btn-spinner" id="btn-spinner" style="display: none;"></span>
+          </button>
         </div>
-
-        <hr class="divider">
-
-        <!-- Duplex Mode Segmented Control -->
-        <div class="control-group">
-          <div class="control-meta-block">
-            <span class="control-title">Page Layout</span>
-            <span class="control-subtitle">Duplex cuts required sheets in half</span>
-          </div>
-          <div class="segmented-control" id="duplex-toggle">
-            <button type="button" class="seg-btn active" data-duplex="SIMPLEX">
-              <span class="seg-icon">📄</span>
-              <span class="seg-title">Single-Sided</span>
-              <span class="seg-rate">1 sheet per page</span>
-            </button>
-            <button type="button" class="seg-btn" data-duplex="DUPLEX">
-              <span class="seg-icon">📑</span>
-              <span class="seg-title">Double-Sided</span>
-              <span class="seg-rate tag-green">Save Paper!</span>
-            </button>
-          </div>
-        </div>
-
-        <hr class="divider">
-
-        <!-- Customer Phone Number for MoMo -->
-        <div class="control-group">
-          <label for="phone-input" class="control-title">Mobile Money Phone Number</label>
-          <p class="control-subtitle">For USSD approval prompt when you arrive at kiosk</p>
-          <div class="phone-input-wrapper">
-            <span class="country-prefix">🇬🇭 +233</span>
-            <input type="tel" id="phone-input" placeholder="024 123 4567" class="phone-field" maxlength="15">
-          </div>
-        </div>
-
       </section>
 
-      <!-- Live Price Calculation Card -->
-      <section class="price-summary-card">
-        <div class="price-header">
-          <span class="price-label">Estimated Total Price</span>
-          <div class="price-total">
-            <span class="currency">GH₵</span>
-            <span class="amount" id="total-price-display">0.00</span>
-          </div>
-        </div>
-        
-        <div class="price-breakdown">
-          <div class="breakdown-item">
-            <span>Detected Pages:</span>
-            <strong id="summary-pages">0 pages</strong>
-          </div>
-          <div class="breakdown-item">
-            <span>Physical Sheets Needed:</span>
-            <strong id="summary-sheets">0 sheets</strong>
-          </div>
-          <div class="breakdown-item">
-            <span>Unit Rate:</span>
-            <strong id="summary-rate">GH₵ 0.50 / sheet</strong>
-          </div>
-        </div>
+      <!-- =================================================================== -->
+      <!-- SCREEN 3: DIGITAL PICKUP VOUCHER PASS                               -->
+      <!-- =================================================================== -->
+      <section class="wizard-step-screen" id="screen-step-3" style="display: none;">
+        <div class="screen-content">
+          
+          <div class="voucher-ticket-card">
+            
+            <div class="voucher-top-bar">
+              <div class="voucher-chips">
+                <span class="chip-kiosk">📍 KIOSK #01 READY</span>
+                <span class="chip-status">STAGED &bull; UNPAID</span>
+              </div>
+              <h2 class="voucher-heading">Your Pickup Pass is Ready!</h2>
+              <p class="voucher-subheading">Walk up to the kiosk and enter this 6-digit code:</p>
+            </div>
 
-        <button type="button" class="btn-stage-job" id="btn-stage-job" disabled>
-          <span class="btn-text">Generate 6-Digit Pickup Code</span>
-          <span class="btn-spinner" id="btn-spinner" style="display: none;"></span>
-        </button>
-        <p class="stage-guarantee">🛡️ Free staging &bull; Valid for 24h &bull; Document shredding guaranteed</p>
+            <!-- Monospaced Code Pass Display -->
+            <div class="voucher-code-container">
+              <span class="voucher-code-label">CAMPUS PICKUP CODE</span>
+              <div class="voucher-digits" id="display-pickup-code">4 8 2 - 9 0 1</div>
+              
+              <button type="button" class="btn-copy-code" id="btn-copy-code">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span id="copy-btn-label">Copy Code</span>
+              </button>
+            </div>
+
+            <!-- Ticket Order Details -->
+            <div class="voucher-specs-table">
+              <div class="v-spec-row">
+                <span class="v-spec-label">Document:</span>
+                <strong class="v-spec-val" id="modal-filename">document.pdf</strong>
+              </div>
+              <div class="v-spec-row">
+                <span class="v-spec-label">Pages / Sheets:</span>
+                <strong class="v-spec-val" id="modal-sheets">4 pages (2 sheets)</strong>
+              </div>
+              <div class="v-spec-row">
+                <span class="v-spec-label">Configuration:</span>
+                <strong class="v-spec-val" id="modal-mode">B&W &bull; Duplex &bull; 1 Copy</strong>
+              </div>
+              <div class="v-spec-row v-spec-total">
+                <span class="v-spec-label">Amount on Arrival:</span>
+                <strong class="v-spec-val highlight-green" id="modal-price">GH₵ 1.00</strong>
+              </div>
+            </div>
+
+            <!-- 3 Kiosk Walkup Instructions -->
+            <div class="walkup-instructions">
+              <div class="walkup-step">
+                <span class="walkup-num">1</span>
+                <span class="walkup-txt">Walk to <strong>PrintOS Kiosk #01</strong> (Central Library Walkway).</span>
+              </div>
+              <div class="walkup-step">
+                <span class="walkup-num">2</span>
+                <span class="walkup-txt">Tap <strong>[Enter Pickup Code]</strong> on the touchscreen keypad.</span>
+              </div>
+              <div class="walkup-step">
+                <span class="walkup-num">3</span>
+                <span class="walkup-txt">Approve MoMo prompt on your phone & collect printed pages.</span>
+              </div>
+            </div>
+
+            <div class="voucher-validity">
+              <span>⏳ Valid for 24 hours &bull; Auto-purged after printing</span>
+            </div>
+
+            <button type="button" class="btn-stage-another" id="btn-stage-another">
+              Stage Another Document
+            </button>
+
+          </div>
+
+        </div>
       </section>
 
     </main>
 
-    <!-- Stage Success Modal -->
-    <div class="modal-backdrop" id="success-modal" style="display: none;">
-      <div class="modal-card">
-        <div class="modal-check-icon">✓</div>
-        <h2 class="modal-title">Job Staged Successfully!</h2>
-        <p class="modal-subtitle">Walk up to any campus kiosk and enter this code:</p>
-
-        <!-- 6-digit Code Display Box -->
-        <div class="code-container">
-          <div class="code-label">YOUR KIOSK PICKUP CODE</div>
-          <div class="code-digits" id="display-pickup-code">--- ---</div>
-          <button type="button" class="btn-copy-code" id="btn-copy-code">Copy Code</button>
-        </div>
-
-        <!-- Job Specs pill -->
-        <div class="job-specs-card">
-          <div class="spec-row">
-            <span class="spec-k">Document:</span>
-            <span class="spec-v" id="modal-filename">document.pdf</span>
-          </div>
-          <div class="spec-row">
-            <span class="spec-k">Pages / Sheets:</span>
-            <span class="spec-v" id="modal-sheets">4 pages (2 sheets)</span>
-          </div>
-          <div class="spec-row">
-            <span class="spec-k">Color & Duplex:</span>
-            <span class="spec-v" id="modal-mode">B&W &bull; Duplex</span>
-          </div>
-          <div class="spec-row highlight">
-            <span class="spec-k">Total on Arrival:</span>
-            <span class="spec-v" id="modal-price">GH₵ 1.00</span>
-          </div>
-        </div>
-
-        <!-- Next Steps list -->
-        <div class="next-steps-card">
-          <div class="step-item">
-            <div class="step-num">1</div>
-            <div class="step-desc">Go to <strong>PrintOS Kiosk #01</strong> (Library Walkway).</div>
-          </div>
-          <div class="step-item">
-            <div class="step-num">2</div>
-            <div class="step-desc">Tap <strong>[Collect Paid Job]</strong> and enter this 6-digit code.</div>
-          </div>
-          <div class="step-item">
-            <div class="step-num">3</div>
-            <div class="step-desc">Approve the MoMo USSD prompt on your phone & collect prints!</div>
-          </div>
-        </div>
-
-        <button type="button" class="btn-stage-another" id="btn-stage-another">Stage Another Document</button>
-      </div>
-    </div>
-
   </div>
 
-  <script src="pwa.js?v=2"></script>
+  <script src="pwa.js?v=21"></script>
 </body>
 </html>

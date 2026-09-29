@@ -86,12 +86,92 @@ def get_removable_drives() -> List[Dict[str, Any]]:
                                     "is_inserted": True
                                 })
 
+    # If no physical drives detected, provide virtual simulated drive for kiosk testing
+    sim_dir = Path(__file__).resolve().parent.parent / "storage" / "simulated_usb"
+    sim_dir.mkdir(parents=True, exist_ok=True)
+    sample_src = Path(__file__).resolve().parent.parent / "storage" / "sample_assignment.pdf"
+    if sample_src.exists():
+        dest = sim_dir / "Bio101_Lecture_Notes.pdf"
+        if not dest.exists():
+            try:
+                shutil.copy2(str(sample_src), str(dest))
+            except Exception:
+                pass
+        dest2 = sim_dir / "CS302_Term_Project_Final.pdf"
+        if not dest2.exists():
+            try:
+                shutil.copy2(str(sample_src), str(dest2))
+            except Exception:
+                pass
+
+    if not drives:
+        drives.append({
+            "letter": "USB (Virtual):",
+            "path": str(sim_dir),
+            "label": "SanDisk 32GB (Simulated)",
+            "total_gb": 32.0,
+            "free_gb": 28.4,
+            "is_inserted": True,
+            "is_simulated": True
+        })
+
     return drives
+
+
+def count_pdf_pages(file_path: Path) -> int:
+    """Extracts actual page count from PDF using pypdf or byte scan."""
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(str(file_path))
+        return len(reader.pages)
+    except Exception:
+        try:
+            with open(file_path, "rb") as f:
+                content = f.read()
+            import re
+            matches = re.findall(rb"/Type\s*/Page\b", content)
+            if matches:
+                return len(matches)
+        except Exception:
+            pass
+    return 1
+
+
+def count_docx_pages(file_path: Path) -> int:
+    """Estimates or extracts page count from docx metadata or word count."""
+    try:
+        import zipfile
+        import xml.etree.ElementTree as ET
+        with zipfile.ZipFile(str(file_path)) as z:
+            for name in z.namelist():
+                if name.endswith("app.xml"):
+                    tree = ET.fromstring(z.read(name))
+                    for elem in tree.iter():
+                        if elem.tag.endswith("Pages") and elem.text and elem.text.isdigit():
+                            pages = int(elem.text)
+                            if pages > 0:
+                                return pages
+    except Exception:
+        pass
+
+    # Fallback: estimate from paragraph & word count via python-docx
+    try:
+        import docx
+        doc = docx.Document(str(file_path))
+        total_words = sum(len(p.text.split()) for p in doc.paragraphs)
+        # Average academic/formal paper has ~400-500 words per page
+        est = max(1, math.ceil(total_words / 450))
+        return est
+    except Exception:
+        pass
+
+    return 1
 
 
 def list_drive_files(drive_path: str, subfolder: str = "") -> Dict[str, Any]:
     """
-    Safely lists printable PDF documents and folders inside the USB drive.
+    Safely lists printable documents (PDF, DOCX, DOC) and folders inside the USB drive.
+    Includes page count for printable documents.
     """
     base = Path(drive_path).resolve()
     target = (base / subfolder).resolve()
@@ -123,9 +203,16 @@ def list_drive_files(drive_path: str, subfolder: str = "") -> Dict[str, Any]:
             elif entry.is_file():
                 ext = name.lower().split(".")[-1] if "." in name else ""
                 is_pdf = (ext == "pdf")
+                is_docx = (ext in ("docx", "doc"))
+                is_printable = is_pdf or is_docx
                 size = 0
+                page_count = 0
                 try:
                     size = entry.stat().st_size
+                    if is_pdf:
+                        page_count = count_pdf_pages(Path(entry.path))
+                    elif is_docx:
+                        page_count = count_docx_pages(Path(entry.path))
                 except Exception:
                     pass
 
@@ -135,14 +222,17 @@ def list_drive_files(drive_path: str, subfolder: str = "") -> Dict[str, Any]:
                     "size_bytes": size,
                     "size_formatted": format_bytes(size),
                     "is_pdf": is_pdf,
+                    "is_docx": is_docx,
+                    "is_printable": is_printable,
+                    "page_count": max(1, page_count) if is_printable else 0,
                     "extension": ext.upper()
                 })
     except Exception as e:
         logger.error(f"Error reading USB files: {e}")
         return {"error": str(e), "folders": [], "files": []}
 
-    # Sort: PDFs first, then alphabetically
-    files.sort(key=lambda x: (not x["is_pdf"], x["name"].lower()))
+    # Sort: Printable documents first, then alphabetically
+    files.sort(key=lambda x: (not x["is_printable"], x["name"].lower()))
     folders.sort(key=lambda x: x["name"].lower())
 
     return {
@@ -160,3 +250,4 @@ def format_bytes(b: int) -> str:
         return f"{b / 1024:.1f} KB"
     else:
         return f"{b / (1024 * 1024):.1f} MB"
+

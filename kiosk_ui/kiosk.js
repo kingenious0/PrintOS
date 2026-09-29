@@ -1,39 +1,64 @@
-// PrintOS Kiosk Terminal - Fullscreen Touchscreen Controller
+// ==========================================================================
+// PrintOS Kiosk Terminal - Commercial POS / ATM Touchscreen Controller
+// Complete State Architecture, USB Workflow Fix & Strict HCI Standards
+// ==========================================================================
 
 document.addEventListener("DOMContentLoaded", () => {
   // Global State
   let enteredDigits = [];
   let currentJob = null;
   let kioskData = null;
-  let resetCountdownTimer = null;
+  let activeUsbDrive = null;
+  let currentUsbSubfolder = "";
+  let usbPollInterval = null;
 
-  // View Sections
+  // Staged USB File pending configuration
+  let pendingUsbFile = null;
+  let cfgCopies = 1;
+  let cfgColor = "BW";
+  let cfgDuplex = "SIMPLEX";
+  let cfgPageCount = 1;
+
+  // MoMo Phone input state on Screen 4
+  let momoDigits = ["0", "2", "4", "1", "2", "3", "4", "5", "6", "7"];
+
+  // Inactivity Timer State (Strict 60-Second Guard)
+  const INACTIVITY_TIMEOUT_SEC = 60;
+  let inactivityRemaining = INACTIVITY_TIMEOUT_SEC;
+  let inactivityTimer = null;
+  let completionTimer = null;
+
+  // -------------------------------------------------------------------------
+  // DOM References
+  // -------------------------------------------------------------------------
   const views = {
     home: document.getElementById("view-home"),
     keypad: document.getElementById("view-keypad"),
+    usb: document.getElementById("view-usb-browser"),
     summary: document.getElementById("view-summary"),
     printing: document.getElementById("view-printing"),
-    wifi: document.getElementById("view-wifi"),
-    usb: document.getElementById("view-usb-browser")
+    completion: document.getElementById("view-completion"),
+    wifi: document.getElementById("view-wifi")
   };
 
   // Header Elements
   const kioskNameTag = document.getElementById("kiosk-name-tag");
+  const stationStatusPill = document.getElementById("station-status-pill");
+  const stationStatusText = document.getElementById("station-status-text");
   const paperLevelVal = document.getElementById("paper-level-val");
   const paperProgressFill = document.getElementById("paper-progress-fill");
-  const printerStateText = document.getElementById("printer-state-text");
-  const printerPulseDot = document.getElementById("printer-pulse-dot");
+  const sessionTimeoutPill = document.getElementById("session-timeout-pill");
+  const sessionCountdownSeconds = document.getElementById("session-countdown-seconds");
   const kioskClock = document.getElementById("kiosk-clock");
+  const btnAdminGear = document.getElementById("btn-admin-gear");
 
-  // Home Elements
+  // Home Screen Actions
   const cardActionCollect = document.getElementById("card-action-collect");
   const cardActionPhone = document.getElementById("card-action-phone");
   const cardActionUsb = document.getElementById("card-action-usb");
 
-  // Keypad Elements
+  // Keypad Screen Elements
   const btnBackHome = document.getElementById("btn-back-home");
-  const keypadErrorMsg = document.getElementById("keypad-error-msg");
-  const numKeys = document.querySelectorAll(".num-key");
   const digitSlots = [
     document.getElementById("slot-0"),
     document.getElementById("slot-1"),
@@ -42,40 +67,89 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("slot-4"),
     document.getElementById("slot-5")
   ];
+  const keypadErrorMsg = document.getElementById("keypad-error-msg");
+  const keypadErrorText = document.getElementById("keypad-error-text");
+  const keypadVerifyingMsg = document.getElementById("keypad-verifying-msg");
+  const numpadButtons = document.querySelectorAll(".virtual-keypad-matrix .num-key");
 
-  // Summary Elements
-  const btnBackKeypad = document.getElementById("btn-back-keypad");
+  // USB Browser Elements
+  const btnBackUsbHome = document.getElementById("btn-back-usb-home");
+  const usbDriveStatusBadge = document.getElementById("usb-drive-status-badge");
+  const usbDriveLabelText = document.getElementById("usb-drive-label-text");
+  const usbWaitingView = document.getElementById("usb-waiting-view");
+  const usbFilesView = document.getElementById("usb-files-view");
+  const usbPathText = document.getElementById("usb-path-text");
+  const btnUsbNavUp = document.getElementById("btn-usb-nav-up");
+  const btnRefreshUsb = document.getElementById("btn-refresh-usb");
+  const usbFileList = document.getElementById("usb-file-list");
+  const btnOpenSimulatedUsb = document.getElementById("btn-open-simulated-usb");
+  const kioskUsbFilePicker = document.getElementById("kiosk-usb-file-picker");
+
+  // Print Configuration Modal Elements (The Fix)
+  const configModal = document.getElementById("config-modal");
+  const btnCloseConfig = document.getElementById("btn-close-config");
+  const cfgFilename = document.getElementById("cfg-filename");
+  const cfgFilesize = document.getElementById("cfg-filesize");
+  const cfgPages = document.getElementById("cfg-pages");
+  const cfgBtnMinus = document.getElementById("cfg-btn-minus");
+  const cfgBtnPlus = document.getElementById("cfg-btn-plus");
+  const cfgCopiesVal = document.getElementById("cfg-copies-val");
+  const cfgColorCards = document.querySelectorAll("#cfg-color-options .selectable-pill-card");
+  const cfgDuplexCards = document.querySelectorAll("#cfg-duplex-options .selectable-pill-card");
+  const cfgSummarySheets = document.getElementById("cfg-summary-sheets");
+  const cfgSummaryPrice = document.getElementById("cfg-summary-price");
+  const btnCfgContinue = document.getElementById("btn-cfg-continue");
+
+  // Summary & Pre-Flight Checkout Elements
+  const btnBackSummary = document.getElementById("btn-back-summary");
   const summaryCodeBadge = document.getElementById("summary-code-badge");
   const sumFilename = document.getElementById("sum-filename");
-  const sumFilemeta = document.getElementById("sum-filemeta");
   const sumPages = document.getElementById("sum-pages");
   const sumCopies = document.getElementById("sum-copies");
   const sumColor = document.getElementById("sum-color");
   const sumDuplex = document.getElementById("sum-duplex");
   const sumSheets = document.getElementById("sum-sheets");
   const sumTotalPrice = document.getElementById("sum-total-price");
-  const chkPaperText = document.getElementById("chk-paper-text");
-  const chkPrinterText = document.getElementById("chk-printer-text");
   const preflightOverallBadge = document.getElementById("preflight-overall-badge");
-  const kioskMomoPhone = document.getElementById("kiosk-momo-phone");
+  const chkPaperItem = document.getElementById("chk-paper-item");
+  const chkPaperText = document.getElementById("chk-paper-text");
+  const chkPrinterItem = document.getElementById("chk-printer-item");
+  const chkPrinterText = document.getElementById("chk-printer-text");
+  const momoPhoneDisplay = document.getElementById("momo-phone-display");
+  const momoKeypadButtons = document.querySelectorAll("#momo-keypad-matrix .mini-num-key");
   const btnPayPrint = document.getElementById("btn-pay-print");
+  const btnPayText = document.getElementById("btn-pay-text");
 
-  // Printing View Elements
+  // Live Printing Process Elements
+  const procIcon = document.getElementById("proc-icon");
   const printStepTitle = document.getElementById("print-step-title");
   const printStepDesc = document.getElementById("print-step-desc");
+  const pipeSteps = [
+    document.getElementById("pipe-step-1"),
+    document.getElementById("pipe-step-2"),
+    document.getElementById("pipe-step-3"),
+    document.getElementById("pipe-step-4")
+  ];
+  const pipeConns = [
+    document.getElementById("pipe-conn-1"),
+    document.getElementById("pipe-conn-2"),
+    document.getElementById("pipe-conn-3")
+  ];
   const ussdSimCard = document.getElementById("ussd-sim-card");
-  const ussdPriceVal = document.getElementById("ussd-price-val");
-  const printSuccessBox = document.getElementById("print-success-box");
+  const ussdPromptMsg = document.getElementById("ussd-prompt-msg");
+  const ussdProgressFill = document.getElementById("ussd-progress-fill");
+
+  // Completion Elements
   const resetSeconds = document.getElementById("reset-seconds");
   const btnFinishNow = document.getElementById("btn-finish-now");
 
   // Wi-Fi View Elements
   const btnBackWifiHome = document.getElementById("btn-back-wifi-home");
+  const btnWifiToKeypad = document.getElementById("btn-wifi-to-keypad");
   const wifiUrlDisplay = document.getElementById("wifi-url-display");
   const wifiQrCode = document.getElementById("wifi-qr-code");
 
   // Admin Modal Elements
-  const btnAdminGear = document.getElementById("btn-admin-gear");
   const adminModal = document.getElementById("admin-modal");
   const btnCloseAdmin = document.getElementById("btn-close-admin");
   const adminCurPaper = document.getElementById("admin-cur-paper");
@@ -85,9 +159,91 @@ document.addEventListener("DOMContentLoaded", () => {
   const adminHostIp = document.getElementById("admin-host-ip");
   const adminDiskFree = document.getElementById("admin-disk-free");
 
-  // -------------------------------------------------------------------
-  // View Routing Function
-  // -------------------------------------------------------------------
+  // Track the origin of the current flow (for Back navigation)
+  let flowOrigin = "keypad"; // "keypad" | "usb"
+
+  // -------------------------------------------------------------------------
+  // INACTIVITY SESSION TIMEOUT (Strict 60s Guard with Temporary File Wipe)
+  // -------------------------------------------------------------------------
+  function resetInactivityTimer() {
+    inactivityRemaining = INACTIVITY_TIMEOUT_SEC;
+    if (sessionCountdownSeconds) {
+      sessionCountdownSeconds.textContent = `${inactivityRemaining}s`;
+    }
+  }
+
+  function startInactivityCountdown() {
+    stopInactivityCountdown();
+    resetInactivityTimer();
+    sessionTimeoutPill.style.display = "flex";
+
+    inactivityTimer = setInterval(async () => {
+      inactivityRemaining--;
+      if (sessionCountdownSeconds) {
+        sessionCountdownSeconds.textContent = `${inactivityRemaining}s`;
+      }
+
+      if (inactivityRemaining <= 0) {
+        stopInactivityCountdown();
+        await handleInactivityTimeout();
+      }
+    }, 1000);
+  }
+
+  function stopInactivityCountdown() {
+    if (inactivityTimer) {
+      clearInterval(inactivityTimer);
+      inactivityTimer = null;
+    }
+    if (sessionTimeoutPill) {
+      sessionTimeoutPill.style.display = "none";
+    }
+  }
+
+  async function handleInactivityTimeout() {
+    // If a temporary job was staged during this session and not completed, cancel and shred it
+    if (currentJob && currentJob.status === "STAGED") {
+      try {
+        await fetch(`/api/jobs/${currentJob.id}/cancel`, { method: "POST" });
+        console.info(`[Kiosk] Inactivity session reset: Cancelled staged job ${currentJob.id}`);
+      } catch (err) {
+        console.warn("Could not cancel abandoned job on timeout:", err);
+      }
+    }
+
+    currentJob = null;
+    pendingUsbFile = null;
+    enteredDigits = [];
+    closeConfigModal();
+    switchView("home");
+  }
+
+  // Any user touch or click resets the inactivity guard
+  window.addEventListener("pointerdown", () => {
+    if (inactivityTimer) {
+      resetInactivityTimer();
+    }
+  }, { passive: true });
+
+  window.addEventListener("keydown", () => {
+    if (inactivityTimer) {
+      resetInactivityTimer();
+    }
+  }, { passive: true });
+
+  // -------------------------------------------------------------------------
+  // Real-Time Clock
+  // -------------------------------------------------------------------------
+  function updateClock() {
+    const now = new Date();
+    kioskClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // -------------------------------------------------------------------------
+  // View Router
+  // -------------------------------------------------------------------------
   function switchView(targetKey) {
     Object.keys(views).forEach((key) => {
       if (key === targetKey) {
@@ -99,24 +255,22 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    if (targetKey === "keypad") {
+    if (targetKey === "home") {
+      stopInactivityCountdown();
+      stopUsbMonitoring();
       clearKeypad();
+    } else if (targetKey === "completion") {
+      stopInactivityCountdown();
+      startCompletionCountdown();
+    } else {
+      // Any interactive inner view starts the 60s inactivity guard
+      startInactivityCountdown();
     }
   }
 
-  // -------------------------------------------------------------------
-  // Real-time Clock
-  // -------------------------------------------------------------------
-  function updateClock() {
-    const now = new Date();
-    kioskClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  }
-  setInterval(updateClock, 1000);
-  updateClock();
-
-  // -------------------------------------------------------------------
-  // Kiosk Telemetry & Status Polling
-  // -------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Telemetry Polling
+  // -------------------------------------------------------------------------
   async function fetchKioskStatus() {
     try {
       const res = await fetch("/api/kiosk/status");
@@ -132,31 +286,35 @@ document.addEventListener("DOMContentLoaded", () => {
       paperProgressFill.style.width = `${pct}%`;
 
       if (data.is_low_paper) {
-        paperProgressFill.style.background = "var(--amber-warn)";
+        paperProgressFill.style.background = "var(--amber)";
       } else {
-        paperProgressFill.style.background = "var(--green-ready)";
+        paperProgressFill.style.background = "var(--emerald)";
       }
 
-      // Update printer state
-      if (data.printer && data.printer.online) {
-        printerStateText.textContent = data.mock_mode ? "Virtual Spooler" : "Ready";
-        printerPulseDot.style.background = "var(--green-ready)";
-        printerPulseDot.style.boxShadow = "0 0 10px var(--green-ready)";
+      // Update station status pill
+      if (data.is_online && data.printer && data.printer.online) {
+        stationStatusText.textContent = data.mock_mode ? "Virtual Spooler" : "Ready";
+        stationStatusPill.className = "status-pill";
+        stationStatusPill.style.background = "var(--emerald-light)";
+        stationStatusPill.style.color = "var(--emerald)";
+        stationStatusPill.style.borderColor = "var(--emerald-border)";
       } else {
-        printerStateText.textContent = "Offline";
-        printerPulseDot.style.background = "var(--red-alert)";
-        printerPulseDot.style.boxShadow = "0 0 10px var(--red-alert)";
+        stationStatusText.textContent = "Offline";
+        stationStatusPill.className = "status-pill";
+        stationStatusPill.style.background = "var(--rose-light)";
+        stationStatusPill.style.color = "var(--rose)";
+        stationStatusPill.style.borderColor = "var(--rose-border)";
       }
 
       kioskNameTag.textContent = data.kiosk_name;
 
-      // Update Wi-Fi URL display
+      // Wi-Fi Display
       if (wifiUrlDisplay && data.pwa_url) {
         wifiUrlDisplay.textContent = data.pwa_url;
       }
 
       // Admin stats
-      if (adminCurPaper) adminCurPaper.textContent = `${remaining} sheets`;
+      if (adminCurPaper) adminCurPaper.textContent = `${remaining} sheets remaining`;
       if (adminMockStatus) adminMockStatus.textContent = data.mock_mode ? "Active (Virtual Spooler)" : "Real Hardware (OS Spooler)";
       if (adminHostIp) adminHostIp.textContent = `${data.local_ip}:8000`;
       if (adminDiskFree) adminDiskFree.textContent = `${data.disk_free_mb} MB Free`;
@@ -166,171 +324,130 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Poll every 4 seconds
   setInterval(fetchKioskStatus, 4000);
   fetchKioskStatus();
 
-  // -------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Home View Button Listeners
-  // -------------------------------------------------------------------
-  cardActionCollect.addEventListener("click", () => switchView("keypad"));
+  // -------------------------------------------------------------------------
+  cardActionCollect.addEventListener("click", () => {
+    flowOrigin = "keypad";
+    switchView("keypad");
+  });
+
   cardActionPhone.addEventListener("click", () => {
     switchView("wifi");
     generateWifiQR();
   });
-  // -------------------------------------------------------------------
-  // USB Drive Monitoring & Direct Printing Logic
-  // -------------------------------------------------------------------
-  let usbPollInterval = null;
-  let usbInsertPollInterval = null;
-  let activeUsbDrive = null;
-  let currentUsbSubfolder = "";
 
-  const btnBackUsbHome = document.getElementById("btn-back-usb-home");
-  const usbDriveStatusBadge = document.getElementById("usb-drive-status-badge");
-  const usbWaitingView = document.getElementById("usb-waiting-view");
-  const usbFilesView = document.getElementById("usb-files-view");
-  const usbBreadcrumb = document.getElementById("usb-breadcrumb");
-  const btnUsbNavUp = document.getElementById("btn-usb-nav-up");
-  const btnRefreshUsb = document.getElementById("btn-refresh-usb");
-  const usbFileList = document.getElementById("usb-file-list");
-
-  // USB Insert Modal Elements
-  const usbModal = document.getElementById("usb-modal");
-  const btnCloseUsb = document.getElementById("btn-close-usb");
-  const btnCancelUsb = document.getElementById("btn-cancel-usb");
-  const usbModalStatusText = document.getElementById("usb-modal-status-text");
-  const usbFileInput = document.getElementById("usb-file-input");
-
-  // Home card click: check immediately if USB is inserted
-  cardActionUsb.addEventListener("click", handleUsbCardClick);
-
-  async function handleUsbCardClick() {
-    try {
-      const res = await fetch("/api/usb/drives");
-      if (res.ok) {
-        const data = await res.json();
-        if (data.inserted && data.drives.length > 0) {
-          // USB drive is ALREADY inserted! Automatically open drive location!
-          openUsbFileBrowser(data.drives[0]);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn("Error checking USB status on click:", e);
-    }
-
-    // No USB drive detected: show the popup telling user to insert a USB!
-    openUsbInsertModal();
-  }
-
-  function openUsbInsertModal() {
-    if (!usbModal) return;
-    usbModal.style.display = "flex";
-    if (usbModalStatusText) {
-      usbModalStatusText.textContent = "Listening for USB flash drive in real time...";
-    }
-
-    stopUsbInsertPolling();
-    // Poll every 1 second while popup is visible
-    usbInsertPollInterval = setInterval(async () => {
-      try {
-        const res = await fetch("/api/usb/drives");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.inserted && data.drives.length > 0) {
-          // A USB was just plugged in!
-          stopUsbInsertPolling();
-          if (usbModalStatusText) {
-            usbModalStatusText.textContent = `USB Detected (${data.drives[0].letter})! Opening files...`;
-          }
-          await sleep(500);
-          closeUsbInsertModal();
-          openUsbFileBrowser(data.drives[0]);
-        }
-      } catch (err) {
-        console.warn("Error polling USB in modal:", err);
-      }
-    }, 1000);
-  }
-
-  function closeUsbInsertModal() {
-    stopUsbInsertPolling();
-    if (usbModal) {
-      usbModal.style.display = "none";
-    }
-  }
-
-  function stopUsbInsertPolling() {
-    if (usbInsertPollInterval) {
-      clearInterval(usbInsertPollInterval);
-      usbInsertPollInterval = null;
-    }
-  }
-
-  if (btnCloseUsb) {
-    btnCloseUsb.addEventListener("click", closeUsbInsertModal);
-  }
-  if (btnCancelUsb) {
-    btnCancelUsb.addEventListener("click", closeUsbInsertModal);
-  }
-
-  // Simulation fallback: user selects a PDF from computer
-  if (usbFileInput) {
-    usbFileInput.addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      closeUsbInsertModal();
-
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("copies", 1);
-      formData.append("color", "BW");
-      formData.append("duplex", "SIMPLEX");
-
-      try {
-        const res = await fetch("/api/jobs/stage", {
-          method: "POST",
-          body: formData
-        });
-        if (!res.ok) throw new Error("Could not stage simulated PDF");
-        const data = await res.json();
-        // Immediately open Job Summary & Pre-Flight release screen
-        lookupStagedJob(data.pickup_code);
-      } catch (err) {
-        alert("Error reading file: " + err.message);
-      }
-    });
-  }
-
-  function openUsbFileBrowser(drive) {
-    activeUsbDrive = drive;
-    currentUsbSubfolder = "";
+  cardActionUsb.addEventListener("click", () => {
+    flowOrigin = "usb";
     switchView("usb");
-
-    if (usbDriveStatusBadge) {
-      usbDriveStatusBadge.textContent = `${drive.letter} (${drive.label})`;
-      usbDriveStatusBadge.className = "code-tag-badge badge-pass";
-    }
-    if (usbWaitingView) usbWaitingView.style.display = "none";
-    if (usbFilesView) usbFilesView.style.display = "flex";
-
-    loadUsbDirectory(drive.path, "");
+    checkUsbDrives();
     startUsbMonitoring();
+  });
+
+  btnBackHome.addEventListener("click", () => switchView("home"));
+  btnBackUsbHome.addEventListener("click", () => switchView("home"));
+  btnBackWifiHome.addEventListener("click", () => switchView("home"));
+  btnWifiToKeypad.addEventListener("click", () => {
+    flowOrigin = "keypad";
+    switchView("keypad");
+  });
+
+  // -------------------------------------------------------------------------
+  // SCREEN 2: Virtual Touch Keypad Logic (Unmasked 6-Digit Display)
+  // -------------------------------------------------------------------------
+  function updateDigitDisplay() {
+    for (let i = 0; i < 6; i++) {
+      if (i < enteredDigits.length) {
+        // STRICT HCI RULE: Visible numbers, NEVER masked dots!
+        digitSlots[i].textContent = enteredDigits[i];
+        digitSlots[i].classList.add("filled");
+      } else {
+        digitSlots[i].innerHTML = "&nbsp;";
+        digitSlots[i].classList.remove("filled");
+      }
+    }
   }
 
-  if (btnBackUsbHome) {
-    btnBackUsbHome.addEventListener("click", () => {
-      stopUsbMonitoring();
-      stopUsbInsertPolling();
-      switchView("home");
+  function clearKeypad() {
+    enteredDigits = [];
+    updateDigitDisplay();
+    hideKeypadFeedback();
+  }
+
+  function hideKeypadFeedback() {
+    keypadErrorMsg.style.display = "none";
+    keypadVerifyingMsg.style.display = "none";
+  }
+
+  numpadButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.key;
+      hideKeypadFeedback();
+
+      if (key === "CLEAR") {
+        enteredDigits = [];
+        updateDigitDisplay();
+        return;
+      }
+
+      if (key === "BACKSPACE") {
+        if (enteredDigits.length > 0) {
+          enteredDigits.pop();
+          updateDigitDisplay();
+        }
+        return;
+      }
+
+      // Add numeric digit
+      if (enteredDigits.length < 6) {
+        enteredDigits.push(key);
+        updateDigitDisplay();
+
+        // When 6th digit entered, auto-verify immediately!
+        if (enteredDigits.length === 6) {
+          verifyPickupCode(enteredDigits.join(""));
+        }
+      }
     });
+  });
+
+  async function verifyPickupCode(code) {
+    keypadVerifyingMsg.style.display = "inline-flex";
+    keypadErrorMsg.style.display = "none";
+
+    try {
+      const res = await fetch(`/api/jobs/lookup/${code}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Invalid or expired pickup code.");
+      }
+
+      // Valid Code found!
+      currentJob = data.job;
+      flowOrigin = "keypad";
+      keypadVerifyingMsg.style.display = "none";
+      
+      // Populate Summary & Pre-Flight Checkout
+      renderCheckoutView(data);
+      switchView("summary");
+
+    } catch (err) {
+      keypadVerifyingMsg.style.display = "none";
+      keypadErrorText.textContent = err.message || "Invalid pickup code. Please check and try again.";
+      keypadErrorMsg.style.display = "inline-flex";
+    }
   }
 
+  // -------------------------------------------------------------------------
+  // SCREEN 3: USB Drive Browser & Detection Logic
+  // -------------------------------------------------------------------------
   function startUsbMonitoring() {
     stopUsbMonitoring();
-    // Poll for USB removal or change every 2 seconds
-    usbPollInterval = setInterval(checkUsbStatusDuringBrowse, 2000);
+    usbPollInterval = setInterval(checkUsbDrives, 2500);
   }
 
   function stopUsbMonitoring() {
@@ -340,40 +457,39 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  async function checkUsbStatusDuringBrowse() {
+  async function checkUsbDrives() {
     try {
       const res = await fetch("/api/usb/drives");
       if (!res.ok) return;
       const data = await res.json();
 
-      if (data.inserted && data.drives.length > 0) {
+      if (data.inserted && data.drives && data.drives.length > 0) {
         const drive = data.drives[0];
         activeUsbDrive = drive;
-        if (usbDriveStatusBadge) {
-          usbDriveStatusBadge.textContent = `${drive.letter} (${drive.label})`;
-          usbDriveStatusBadge.className = "code-tag-badge badge-pass";
+        usbDriveLabelText.textContent = `${drive.letter} (${drive.label})`;
+        usbDriveStatusBadge.style.display = "inline-flex";
+        usbWaitingView.style.display = "none";
+        usbFilesView.style.display = "flex";
+
+        if (!currentUsbSubfolder && usbFileList.children.length === 0) {
+          loadUsbDirectory(drive.path, "");
         }
-        if (usbWaitingView) usbWaitingView.style.display = "none";
-        if (usbFilesView) usbFilesView.style.display = "flex";
       } else {
-        // USB was removed while viewing files!
         activeUsbDrive = null;
-        if (usbDriveStatusBadge) {
-          usbDriveStatusBadge.textContent = "USB Drive Removed";
-          usbDriveStatusBadge.className = "code-tag-badge badge-fail";
-        }
-        if (usbWaitingView) usbWaitingView.style.display = "flex";
-        if (usbFilesView) usbFilesView.style.display = "none";
-        if (usbFileList) usbFileList.innerHTML = "";
+        usbDriveLabelText.textContent = "No USB Detected";
+        usbWaitingView.style.display = "flex";
+        usbFilesView.style.display = "none";
+        usbFileList.innerHTML = "";
       }
     } catch (e) {
-      console.warn("Error checking USB during browse:", e);
+      console.warn("Error checking USB drives:", e);
     }
   }
 
   async function loadUsbDirectory(drivePath, folder = "") {
     currentUsbSubfolder = folder;
-    usbFileList.innerHTML = "<div class='usb-empty-state'>Loading files from USB drive...</div>";
+    usbFileList.innerHTML = "<div class='usb-empty-state'>Scanning files on USB drive...</div>";
+    usbPathText.textContent = `USB Drive (${drivePath})${folder ? ' / ' + folder : ''}`;
 
     try {
       const res = await fetch(`/api/usb/browse?drive=${encodeURIComponent(drivePath)}&folder=${encodeURIComponent(folder)}`);
@@ -383,10 +499,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const data = await res.json();
-      usbBreadcrumb.textContent = `📁 USB (${drivePath}) ${folder ? "/ " + folder : ""}`;
 
       if (data.parent_path !== null && data.parent_path !== folder && folder !== "") {
-        btnUsbNavUp.style.display = "inline-block";
+        btnUsbNavUp.style.display = "inline-flex";
         btnUsbNavUp.onclick = () => loadUsbDirectory(drivePath, data.parent_path === "." ? "" : data.parent_path);
       } else {
         btnUsbNavUp.style.display = "none";
@@ -403,82 +518,73 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const hasItems = (data.folders && data.folders.length > 0) || (data.files && data.files.length > 0);
     if (!hasItems) {
-      usbFileList.innerHTML = "<div class='usb-empty-state'>This folder is empty.</div>";
+      usbFileList.innerHTML = "<div class='usb-empty-state'>No documents found in this folder.</div>";
       return;
     }
 
-    // Render Folders
+    // Folders
     if (data.folders) {
-      data.folders.forEach(folder => {
+      data.folders.forEach(f => {
         const row = document.createElement("div");
         row.className = "usb-file-row";
         row.innerHTML = `
-          <div class="usb-file-info">
+          <div class="usb-file-left">
             <div class="usb-file-icon icon-folder">📁</div>
-            <div>
-              <div class="usb-file-name">${folder.name}</div>
-              <div class="usb-file-meta">Folder</div>
+            <div class="usb-file-meta-col">
+              <div class="usb-file-name">${f.name}</div>
+              <div class="usb-file-sub">Folder</div>
             </div>
           </div>
-          <button type="button" class="btn-usb-open-folder">Open Folder &rarr;</button>
+          <button type="button" class="btn-toolbar">Open &rarr;</button>
         `;
-        row.querySelector(".btn-usb-open-folder").addEventListener("click", () => {
-          loadUsbDirectory(drivePath, folder.rel_path);
-        });
+        row.addEventListener("click", () => loadUsbDirectory(drivePath, f.rel_path));
         usbFileList.appendChild(row);
       });
     }
 
-    // Render Files
+    // Files
     if (data.files) {
-      data.files.forEach(file => {
+      data.files.forEach(f => {
         const row = document.createElement("div");
         row.className = "usb-file-row";
-        const isPdf = file.is_pdf;
-        const iconClass = isPdf ? "icon-pdf" : "icon-other";
-        const iconText = isPdf ? "PDF" : (file.extension || "FILE");
+        const fileNameLower = (f.name || "").toLowerCase();
+        const extLower = (f.extension || "").toLowerCase();
+        const isPdf = Boolean(f.is_pdf) || fileNameLower.endsWith(".pdf") || extLower === "pdf";
+        const isDocx = Boolean(f.is_docx) || fileNameLower.endsWith(".docx") || fileNameLower.endsWith(".doc") || extLower === "docx" || extLower === "doc";
+        const isPrintable = Boolean(f.is_printable) || isPdf || isDocx;
+
+        let iconClass = "icon-other";
+        if (isPdf) iconClass = "icon-pdf";
+        else if (isDocx) iconClass = "icon-docx";
+
+        const iconText = isPdf ? "PDF" : (isDocx ? "DOCX" : (f.extension || "FILE"));
+        const pageCount = f.page_count || 1;
+        const pageBadge = isPrintable ? `<span class="usb-page-pill">${pageCount} ${pageCount === 1 ? 'Page' : 'Pages'}</span>` : "";
 
         row.innerHTML = `
-          <div class="usb-file-info">
+          <div class="usb-file-left">
             <div class="usb-file-icon ${iconClass}">${iconText}</div>
-            <div>
-              <div class="usb-file-name">${file.name}</div>
-              <div class="usb-file-meta">${file.size_formatted} &bull; ${isPdf ? "Ready to Print" : file.extension}</div>
+            <div class="usb-file-meta-col">
+              <div class="usb-file-name">${f.name}</div>
+              <div class="usb-file-sub">
+                <span>${f.size_formatted}</span>
+                ${pageBadge}
+              </div>
             </div>
           </div>
-          ${isPdf ? `<button type="button" class="btn-usb-print">Select to Print &rarr;</button>` : `<span style="font-size: 13px; color: var(--text-dim); padding-right: 12px;">Non-PDF</span>`}
+          ${isPrintable ? `<button type="button" class="btn-select-file">Configure & Print &rarr;</button>` : `<span style="font-size: 13px; color: var(--text-muted);">Non-Printable</span>`}
         `;
 
-        if (isPdf) {
-          const btnPrint = row.querySelector(".btn-usb-print");
-          btnPrint.addEventListener("click", async () => {
-            btnPrint.disabled = true;
-            btnPrint.textContent = "Loading Document...";
-            try {
-              const res = await fetch("/api/usb/stage-file", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  drive: drivePath,
-                  rel_path: file.rel_path,
-                  copies: 1,
-                  color: "BW",
-                  duplex: "SIMPLEX"
-                })
-              });
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({ detail: "Failed to stage USB file." }));
-                throw new Error(err.detail);
-              }
-              const staged = await res.json();
-              stopUsbMonitoring();
-              // Smoothly transition directly to the Job Summary & Pre-Flight Release Screen!
-              lookupStagedJob(staged.pickup_code);
-            } catch (err) {
-              alert("Error staging USB document: " + err.message);
-              btnPrint.disabled = false;
-              btnPrint.textContent = "Select to Print →";
-            }
+        if (isPrintable) {
+          row.addEventListener("click", () => {
+            // CRITICAL FIX: NEVER skip to payment! Open configuration drawer/modal!
+            openPrintConfigModal({
+              drive: drivePath,
+              rel_path: f.rel_path,
+              name: f.name,
+              size_formatted: f.size_formatted,
+              page_count: f.page_count || 1
+            });
           });
         }
 
@@ -487,339 +593,451 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  if (btnRefreshUsb) {
-    btnRefreshUsb.addEventListener("click", () => {
-      if (activeUsbDrive) {
-        loadUsbDirectory(activeUsbDrive.path, currentUsbSubfolder);
-      } else {
-        checkUsbStatus();
-      }
-    });
-  }
-
-  btnBackHome.addEventListener("click", () => {
-    stopUsbMonitoring();
-    switchView("home");
-  });
-  btnBackWifiHome.addEventListener("click", () => switchView("home"));
-  btnBackKeypad.addEventListener("click", () => switchView("home"));
-
-  // -------------------------------------------------------------------
-  // Touchscreen Virtual Keypad Logic
-  // -------------------------------------------------------------------
-  function updateDigitDisplay() {
-    for (let i = 0; i < 6; i++) {
-      if (i < enteredDigits.length) {
-        digitSlots[i].textContent = enteredDigits[i];
-        digitSlots[i].classList.add("filled");
-      } else {
-        digitSlots[i].textContent = "•";
-        digitSlots[i].classList.remove("filled");
-      }
-    }
-  }
-
-  function clearKeypad() {
-    enteredDigits = [];
-    keypadErrorMsg.style.display = "none";
-    updateDigitDisplay();
-  }
-
-  function handleKeypadInput(key) {
-    keypadErrorMsg.style.display = "none";
-
-    if (key === "CLEAR") {
-      enteredDigits = [];
-      updateDigitDisplay();
-      return;
-    }
-
-    if (key === "BACKSPACE") {
-      if (enteredDigits.length > 0) {
-        enteredDigits.pop();
-        updateDigitDisplay();
-      }
-      return;
-    }
-
-    // Number entered
-    if (enteredDigits.length < 6 && /^[0-9]$/.test(key)) {
-      enteredDigits.push(key);
-      updateDigitDisplay();
-
-      // If all 6 digits entered, automatically perform lookup
-      if (enteredDigits.length === 6) {
-        const fullCode = enteredDigits.join("");
-        lookupStagedJob(fullCode);
-      }
-    }
-  }
-
-  numKeys.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const key = btn.dataset.key;
-      handleKeypadInput(key);
-    });
-  });
-
-  // Physical Keyboard Listener (for laptop or attached bar-code reader)
-  window.addEventListener("keydown", (e) => {
-    if (views.keypad.style.display !== "none") {
-      if (/^[0-9]$/.test(e.key)) {
-        handleKeypadInput(e.key);
-      } else if (e.key === "Backspace") {
-        handleKeypadInput("BACKSPACE");
-      } else if (e.key === "Escape") {
-        handleKeypadInput("CLEAR");
-      }
+  btnRefreshUsb.addEventListener("click", () => {
+    if (activeUsbDrive) {
+      loadUsbDirectory(activeUsbDrive.path, currentUsbSubfolder);
+    } else {
+      checkUsbDrives();
     }
   });
 
-  // -------------------------------------------------------------------
-  // Job Lookup & Pre-Flight Validation
-  // -------------------------------------------------------------------
-  async function lookupStagedJob(code) {
+  // Simulated USB options
+  btnOpenSimulatedUsb.addEventListener("click", async () => {
     try {
-      const res = await fetch(`/api/jobs/lookup/${code}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Lookup failed." }));
-        keypadErrorMsg.textContent = err.detail || "Invalid or expired pickup code.";
-        keypadErrorMsg.style.display = "block";
-        // Shake feedback
-        digitSlots.forEach(s => s.classList.add("shake"));
-        setTimeout(() => digitSlots.forEach(s => s.classList.remove("shake")), 500);
+      const res = await fetch("/api/usb/drives");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.drives && data.drives.length > 0) {
+          const simDrive = data.drives[0];
+          activeUsbDrive = simDrive;
+          usbWaitingView.style.display = "none";
+          usbFilesView.style.display = "flex";
+          loadUsbDirectory(simDrive.path, "");
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load simulated USB drive:", e);
+    }
+    // Fallback: trigger file picker
+    kioskUsbFilePicker.click();
+  });
+
+  kioskUsbFilePicker.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Open configuration modal directly for this simulated file
+    openPrintConfigModal({
+      isLocalUpload: true,
+      fileObj: file,
+      name: file.name,
+      size_formatted: `${(file.size / 1024).toFixed(1)} KB`,
+      page_count: 4 // default estimated
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // PRINT CONFIGURATION MODAL (THE CRITICAL FIX)
+  // -------------------------------------------------------------------------
+  function openPrintConfigModal(fileData) {
+    pendingUsbFile = fileData;
+    cfgCopies = 1;
+    cfgColor = "BW";
+    cfgDuplex = "SIMPLEX";
+    cfgPageCount = fileData.page_count || 1;
+
+    // Populate Modal Info
+    cfgFilename.textContent = fileData.name;
+    cfgFilesize.textContent = fileData.size_formatted;
+    cfgPages.textContent = `${cfgPageCount} ${cfgPageCount === 1 ? 'Page' : 'Pages'} Detected`;
+
+    cfgCopiesVal.textContent = cfgCopies;
+    updateConfigSelectionUI();
+    recalculateConfigSummary();
+
+    configModal.style.display = "flex";
+  }
+
+  function closeConfigModal() {
+    configModal.style.display = "none";
+    pendingUsbFile = null;
+  }
+
+  btnCloseConfig.addEventListener("click", closeConfigModal);
+
+  // Stepper Handlers
+  cfgBtnMinus.addEventListener("click", () => {
+    if (cfgCopies > 1) {
+      cfgCopies--;
+      cfgCopiesVal.textContent = cfgCopies;
+      recalculateConfigSummary();
+    }
+  });
+
+  cfgBtnPlus.addEventListener("click", () => {
+    if (cfgCopies < 50) {
+      cfgCopies++;
+      cfgCopiesVal.textContent = cfgCopies;
+      recalculateConfigSummary();
+    }
+  });
+
+  // Color Mode Pill Selection
+  cfgColorCards.forEach(card => {
+    card.addEventListener("click", () => {
+      cfgColor = card.dataset.color;
+      updateConfigSelectionUI();
+      recalculateConfigSummary();
+    });
+  });
+
+  // Duplex Mode Pill Selection
+  cfgDuplexCards.forEach(card => {
+    card.addEventListener("click", () => {
+      cfgDuplex = card.dataset.duplex;
+      updateConfigSelectionUI();
+      recalculateConfigSummary();
+    });
+  });
+
+  function updateConfigSelectionUI() {
+    cfgColorCards.forEach(c => {
+      if (c.dataset.color === cfgColor) {
+        c.classList.add("selected");
+      } else {
+        c.classList.remove("selected");
+      }
+    });
+
+    cfgDuplexCards.forEach(d => {
+      if (d.dataset.duplex === cfgDuplex) {
+        d.classList.add("selected");
+      } else {
+        d.classList.remove("selected");
+      }
+    });
+  }
+
+  function recalculateConfigSummary() {
+    let sheetsPerCopy = (cfgDuplex === "DUPLEX") ? Math.ceil(cfgPageCount / 2) : cfgPageCount;
+    let totalSheets = sheetsPerCopy * cfgCopies;
+    let rate = (cfgColor === "COLOR") ? 1.00 : 0.50;
+    let price = (totalSheets * rate).toFixed(2);
+
+    cfgSummarySheets.textContent = `${totalSheets} ${totalSheets === 1 ? 'Sheet' : 'Sheets'} Required`;
+    cfgSummaryPrice.textContent = `GH₵ ${price}`;
+  }
+
+  // Continue to Payment from Configuration Screen
+  btnCfgContinue.addEventListener("click", async () => {
+    if (!pendingUsbFile) return;
+
+    btnCfgContinue.disabled = true;
+    btnCfgContinue.textContent = "Preparing Document...";
+
+    try {
+      let stagedData = null;
+
+      if (pendingUsbFile.isLocalUpload) {
+        // Upload simulated file with configuration parameters
+        const formData = new FormData();
+        formData.append("file", pendingUsbFile.fileObj);
+        formData.append("copies", cfgCopies);
+        formData.append("color", cfgColor);
+        formData.append("duplex", cfgDuplex);
+
+        const res = await fetch("/api/jobs/stage", {
+          method: "POST",
+          body: formData
+        });
+        if (!res.ok) throw new Error("Could not stage simulated file.");
+        stagedData = await res.json();
+
+      } else {
+        // Direct USB file staging with customized copies, color, and duplex!
+        const res = await fetch("/api/usb/stage-file", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            drive: pendingUsbFile.drive,
+            rel_path: pendingUsbFile.rel_path,
+            copies: cfgCopies,
+            color: cfgColor,
+            duplex: cfgDuplex
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: "Failed to stage USB file." }));
+          throw new Error(err.detail);
+        }
+        stagedData = await res.json();
+      }
+
+      // Close modal and lookup staged job to show Screen 4 Pre-Flight & Payment!
+      closeConfigModal();
+      stopUsbMonitoring();
+
+      const lookupRes = await fetch(`/api/jobs/lookup/${stagedData.pickup_code}`);
+      const fullData = await lookupRes.json();
+
+      currentJob = fullData.job;
+      flowOrigin = "usb";
+      renderCheckoutView(fullData);
+      switchView("summary");
+
+    } catch (err) {
+      alert("Error configuring document: " + err.message);
+    } finally {
+      btnCfgContinue.disabled = false;
+      btnCfgContinue.innerHTML = `<span>Continue to Payment</span> <span>&rarr;</span>`;
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // SCREEN 4: Pre-Flight Health & Payment Screen Logic
+  // -------------------------------------------------------------------------
+  function renderCheckoutView(data) {
+    const job = data.job;
+    const preflight = data.preflight;
+
+    summaryCodeBadge.textContent = `PICKUP CODE: ${job.formatted_code}`;
+    sumFilename.textContent = job.file_name;
+    sumPages.textContent = `${job.page_count} ${job.page_count === 1 ? 'page' : 'pages'}`;
+    sumCopies.textContent = `${job.copies} ${job.copies === 1 ? 'copy' : 'copies'}`;
+    sumColor.textContent = job.color_mode === "COLOR" ? "Full Color" : "Black & White";
+    sumDuplex.textContent = job.duplex_mode === "DUPLEX" ? "Double-Sided (Duplex)" : "Single-Sided";
+    sumSheets.textContent = `${job.sheet_count} ${job.sheet_count === 1 ? 'sheet' : 'sheets'}`;
+    sumTotalPrice.textContent = job.total_price.toFixed(2);
+    btnPayText.textContent = `Pay GH₵ ${job.total_price.toFixed(2)} via Mobile Money & Print`;
+
+    // Pre-flight indicators
+    if (preflight.paper_ok) {
+      chkPaperItem.className = "check-item ok";
+      chkPaperItem.querySelector(".check-icon").textContent = "✓";
+      chkPaperText.textContent = `${preflight.paper_available} Available (Need ${preflight.sheets_needed})`;
+    } else {
+      chkPaperItem.className = "check-item warn";
+      chkPaperItem.querySelector(".check-icon").textContent = "⚠️";
+      chkPaperText.textContent = `Low Paper: ${preflight.paper_available} sheets (Need ${preflight.sheets_needed})`;
+    }
+
+    if (preflight.printer_online) {
+      chkPrinterItem.className = "check-item ok";
+      chkPrinterItem.querySelector(".check-icon").textContent = "✓";
+      chkPrinterText.textContent = "Online & Ready";
+    } else {
+      chkPrinterItem.className = "check-item warn";
+      chkPrinterItem.querySelector(".check-icon").textContent = "⚠️";
+      chkPrinterText.textContent = "Offline";
+    }
+
+    if (preflight.can_print) {
+      preflightOverallBadge.textContent = "All Systems Ready";
+      preflightOverallBadge.className = "preflight-badge-pass";
+      btnPayPrint.disabled = false;
+    } else {
+      preflightOverallBadge.textContent = "Hardware Attention Required";
+      preflightOverallBadge.className = "preflight-badge-fail";
+      btnPayPrint.disabled = true;
+    }
+
+    // Set phone number if job has one
+    if (job.phone_number && job.phone_number.length >= 9) {
+      momoDigits = job.phone_number.replace(/\D/g, "").split("");
+    }
+    updateMomoDisplay();
+  }
+
+  // MoMo On-Screen Keypad Handler
+  function updateMomoDisplay() {
+    if (momoDigits.length === 0) {
+      momoPhoneDisplay.textContent = "Tap numbers below";
+      momoPhoneDisplay.classList.add("empty");
+    } else {
+      momoPhoneDisplay.textContent = formatPhone(momoDigits.join(""));
+      momoPhoneDisplay.classList.remove("empty");
+    }
+  }
+
+  function formatPhone(digits) {
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
+    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 10)}`;
+  }
+
+  momoKeypadButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const val = btn.dataset.momo;
+      if (val === "CLEAR") {
+        momoDigits = [];
+        updateMomoDisplay();
         return;
       }
-
-      const data = await res.json();
-      currentJob = data.job;
-      const preflight = data.preflight;
-
-      // Populate Summary View
-      summaryCodeBadge.textContent = `CODE: ${currentJob.formatted_code}`;
-      sumFilename.textContent = currentJob.file_name;
-      if (sumFilemeta) {
-        sumFilemeta.textContent = `${formatBytes(currentJob.file_size_bytes)} • Staged remotely`;
+      if (val === "BACK") {
+        if (momoDigits.length > 0) {
+          momoDigits.pop();
+          updateMomoDisplay();
+        }
+        return;
       }
-      sumPages.textContent = `${currentJob.page_count} pages`;
-      sumCopies.textContent = `${currentJob.copies} cop${currentJob.copies > 1 ? "ies" : "y"}`;
-      sumColor.textContent = currentJob.color_mode === "COLOR" ? "Full Color" : "Black & White";
-      sumDuplex.textContent = currentJob.duplex_mode === "DUPLEX" ? "Double-Sided (Duplex)" : "Single-Sided";
-      sumSheets.textContent = `${currentJob.sheet_count} sheet${currentJob.sheet_count > 1 ? "s" : ""}`;
-      sumTotalPrice.textContent = Number(currentJob.total_price).toFixed(2);
-
-      // Pre-populate MoMo phone
-      kioskMomoPhone.value = currentJob.phone_number || "";
-
-      // Health checks
-      chkPaperText.textContent = `${preflight.paper_available} available (Need ${preflight.sheets_needed})`;
-      chkPrinterText.textContent = preflight.printer_detail || "Ready";
-
-      if (preflight.can_print) {
-        preflightOverallBadge.textContent = "ALL SYSTEMS GO";
-        preflightOverallBadge.className = "preflight-badge badge-pass";
-        btnPayPrint.disabled = false;
-        btnPayPrint.style.opacity = "1";
-      } else {
-        preflightOverallBadge.textContent = "HARDWARE BLOCKED";
-        preflightOverallBadge.className = "preflight-badge badge-fail";
-        btnPayPrint.disabled = true;
-        btnPayPrint.style.opacity = "0.5";
-        alert("Pre-flight check failed! This kiosk cannot fulfill this print job right now.");
+      if (momoDigits.length < 10) {
+        momoDigits.push(val);
+        updateMomoDisplay();
       }
+    });
+  });
 
-      switchView("summary");
-    } catch (err) {
-      console.error("Kiosk lookup error:", err);
-      keypadErrorMsg.textContent = "Error displaying job details: " + err.message;
-      keypadErrorMsg.style.display = "block";
+  // Back button from summary checkout screen
+  btnBackSummary.addEventListener("click", () => {
+    if (flowOrigin === "usb") {
+      switchView("usb");
+    } else {
+      switchView("keypad");
     }
-  }
+  });
 
-  // -------------------------------------------------------------------
-  // Pay & Print Execution Flow
-  // -------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // SCREEN 5: Pay & Spool Print Pipeline
+  // -------------------------------------------------------------------------
   btnPayPrint.addEventListener("click", async () => {
     if (!currentJob) return;
 
-    const phone = kioskMomoPhone.value.trim() || currentJob.phone_number || "0240000000";
+    const phoneStr = momoDigits.join("");
+    if (phoneStr.length < 9) {
+      alert("Please enter a valid 10-digit Mobile Money phone number.");
+      return;
+    }
 
-    // Switch to printing animation view
+    btnPayPrint.disabled = true;
     switchView("printing");
+    await executePrintPipeline(currentJob, phoneStr);
+  });
 
-    // Reset stepper
-    resetPipelineStepper();
+  async function executePrintPipeline(job, phone) {
+    // Step 1: Health Check Active
+    setPipelineStep(0, "Hardware Pre-Flight Check", "Verifying paper levels and spooler readiness...");
+    await sleep(700);
 
-    // Step 1: Hardware Pre-Flight Check
-    setPipelineStep(1, "Verifying Hardware...", "Checking paper levels, disk buffer, and printer state...");
-    await sleep(800);
-
-    // Step 2: MoMo USSD Push
-    setPipelineStep(2, "Dispatching Mobile Money Prompt...", `USSD authorization sent to +233 ${phone}`);
-    ussdPriceVal.textContent = Number(currentJob.total_price).toFixed(2);
+    // Step 2: MoMo Approval USSD Push
+    setPipelineStep(1, "Mobile Money USSD Prompt", `USSD prompt dispatched to +233 ${formatPhone(phone)}. Please approve on your phone...`);
     ussdSimCard.style.display = "block";
+    ussdPromptMsg.textContent = `"Pay GH₵ ${job.total_price.toFixed(2)} to PrintOS Kiosk #01? Approving simulated transaction..."`;
 
-    // Call Backend Payment & Print endpoint
+    // Simulate animated USSD approval fill
+    animateProgressBar(ussdProgressFill, 1400);
+    await sleep(1500);
+
+    // Step 3: Spooling File & Hardware Print Dispatch
+    setPipelineStep(2, "Spooling Document to Printer", "Transferring document stream to local physical print spooler...");
+    ussdSimCard.style.display = "none";
+
     try {
-      const res = await fetch(`/api/jobs/${currentJob.id}/pay`, {
+      const res = await fetch(`/api/jobs/${job.id}/pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone_number: phone })
+        body: JSON.stringify({
+          phone_number: phone,
+          network: "MTN"
+        })
       });
 
       if (!res.ok) {
-        const error = await res.json().catch(() => ({ detail: "Payment or printing failed." }));
-        alert("Error: " + (error.detail || "Print job aborted."));
-        switchView("summary");
-        return;
+        const err = await res.json().catch(() => ({ detail: "Printing transaction failed." }));
+        throw new Error(err.detail);
       }
 
       const result = await res.json();
 
-      // Step 3: Spooling
-      ussdSimCard.style.display = "none";
-      setPipelineStep(3, "Payment Confirmed!", "Spooling document to Canon Laser Printer...");
-      await sleep(1200);
-
-      // Step 4: Printing
-      setPipelineStep(4, "Printing Document...", `Dispensing ${currentJob.sheet_count} page(s) to collection tray...`);
-      await sleep(1500);
-
-      // Complete!
-      showPrintSuccess();
+      // Step 4: Printing Out & Paper feed
+      setPipelineStep(3, "Printing Complete", "Physical sheets fed through output tray. File shredding complete.");
+      await sleep(1000);
 
       // Refresh kiosk telemetry
       fetchKioskStatus();
 
-    } catch (err) {
-      alert("Print execution error: " + err.message);
-      switchView("summary");
-    }
-  });
+      // Navigate to Screen 6 Completion Screen
+      switchView("completion");
 
-  function resetPipelineStepper() {
-    printSuccessBox.style.display = "none";
-    ussdSimCard.style.display = "none";
-    for (let i = 1; i <= 4; i++) {
-      const step = document.getElementById(`pipe-step-${i}`);
-      if (step) {
-        step.className = "pipe-step";
-      }
-      const conn = document.getElementById(`pipe-conn-${i}`);
-      if (conn) {
-        conn.className = "pipe-connector";
-      }
+    } catch (err) {
+      alert("Print failed: " + err.message);
+      switchView("summary");
+      btnPayPrint.disabled = false;
     }
   }
 
-  function setPipelineStep(stepNum, title, desc) {
+  function setPipelineStep(stepIndex, title, desc) {
     printStepTitle.textContent = title;
     printStepDesc.textContent = desc;
 
-    for (let i = 1; i <= 4; i++) {
-      const step = document.getElementById(`pipe-step-${i}`);
-      const conn = document.getElementById(`pipe-conn-${i - 1}`);
-
-      if (i < stepNum) {
-        if (step) step.className = "pipe-step step-done";
-        if (conn) conn.className = "pipe-connector conn-active";
-      } else if (i === stepNum) {
-        if (step) step.className = "pipe-step step-active";
+    pipeSteps.forEach((step, idx) => {
+      if (idx < stepIndex) {
+        step.className = "step-node done";
+        step.querySelector(".step-circle").textContent = "✓";
+      } else if (idx === stepIndex) {
+        step.className = "step-node active";
+        step.querySelector(".step-circle").textContent = `${idx + 1}`;
       } else {
-        if (step) step.className = "pipe-step";
+        step.className = "step-node";
+        step.querySelector(".step-circle").textContent = `${idx + 1}`;
       }
-    }
+    });
+
+    pipeConns.forEach((conn, idx) => {
+      if (idx < stepIndex) {
+        conn.classList.add("filled");
+      } else {
+        conn.classList.remove("filled");
+      }
+    });
   }
 
-  function showPrintSuccess() {
-    printStepTitle.textContent = "Print Job Finished!";
-    printStepDesc.textContent = "Document safely unlinked & shredded.";
-    for (let i = 1; i <= 4; i++) {
-      const step = document.getElementById(`pipe-step-${i}`);
-      if (step) step.className = "pipe-step step-done";
+  function animateProgressBar(element, durationMs) {
+    element.style.width = "0%";
+    const start = performance.now();
+    function tick(now) {
+      const elapsed = now - start;
+      const pct = Math.min(100, Math.round((elapsed / durationMs) * 100));
+      element.style.width = `${pct}%`;
+      if (pct < 100) {
+        requestAnimationFrame(tick);
+      }
     }
+    requestAnimationFrame(tick);
+  }
 
-    printSuccessBox.style.display = "block";
+  // -------------------------------------------------------------------------
+  // SCREEN 6: Completion Screen & Auto-Reset Logic
+  // -------------------------------------------------------------------------
+  function startCompletionCountdown() {
+    let seconds = 10;
+    resetSeconds.textContent = seconds;
 
-    let timeLeft = 8;
-    resetSeconds.textContent = timeLeft;
+    if (completionTimer) clearInterval(completionTimer);
 
-    if (resetCountdownTimer) clearInterval(resetCountdownTimer);
-    resetCountdownTimer = setInterval(() => {
-      timeLeft--;
-      resetSeconds.textContent = timeLeft;
-      if (timeLeft <= 0) {
-        clearInterval(resetCountdownTimer);
+    completionTimer = setInterval(() => {
+      seconds--;
+      resetSeconds.textContent = seconds;
+      if (seconds <= 0) {
+        clearInterval(completionTimer);
+        completionTimer = null;
         switchView("home");
       }
     }, 1000);
   }
 
   btnFinishNow.addEventListener("click", () => {
-    if (resetCountdownTimer) clearInterval(resetCountdownTimer);
+    if (completionTimer) {
+      clearInterval(completionTimer);
+      completionTimer = null;
+    }
     switchView("home");
   });
 
-  // -------------------------------------------------------------------
-  // Wi-Fi Direct QR Code Generator (SVG)
-  // -------------------------------------------------------------------
-  function generateWifiQR() {
-    const url = (kioskData && kioskData.pwa_url) ? kioskData.pwa_url : `${window.location.origin}/upload`;
-    wifiUrlDisplay.textContent = url;
-
-    // Render high-contrast SVG QR Code visual
-    wifiQrCode.innerHTML = `
-      <svg viewBox="0 0 200 200" width="100%" height="100%">
-        <!-- Background -->
-        <rect width="200" height="200" fill="#ffffff"/>
-        <!-- Corner Markers -->
-        <rect x="20" y="20" width="50" height="50" fill="#000000"/>
-        <rect x="30" y="30" width="30" height="30" fill="#ffffff"/>
-        <rect x="40" y="40" width="10" height="10" fill="#000000"/>
-
-        <rect x="130" y="20" width="50" height="50" fill="#000000"/>
-        <rect x="140" y="30" width="30" height="30" fill="#ffffff"/>
-        <rect x="150" y="40" width="10" height="10" fill="#000000"/>
-
-        <rect x="20" y="130" width="50" height="50" fill="#000000"/>
-        <rect x="30" y="140" width="30" height="30" fill="#ffffff"/>
-        <rect x="40" y="150" width="10" height="10" fill="#000000"/>
-
-        <!-- Simulated Data Pixels -->
-        <rect x="85" y="25" width="10" height="10" fill="#000000"/>
-        <rect x="105" y="25" width="10" height="10" fill="#000000"/>
-        <rect x="95" y="45" width="10" height="10" fill="#000000"/>
-        <rect x="85" y="65" width="10" height="10" fill="#000000"/>
-        <rect x="105" y="65" width="10" height="10" fill="#000000"/>
-
-        <rect x="25" y="85" width="10" height="10" fill="#000000"/>
-        <rect x="45" y="95" width="10" height="10" fill="#000000"/>
-        <rect x="65" y="85" width="10" height="10" fill="#000000"/>
-        <rect x="85" y="95" width="10" height="10" fill="#000000"/>
-        <rect x="105" y="85" width="10" height="10" fill="#000000"/>
-        <rect x="125" y="95" width="10" height="10" fill="#000000"/>
-        <rect x="145" y="85" width="10" height="10" fill="#000000"/>
-        <rect x="165" y="95" width="10" height="10" fill="#000000"/>
-
-        <rect x="95" y="115" width="10" height="10" fill="#000000"/>
-        <rect x="115" y="115" width="10" height="10" fill="#000000"/>
-        <rect x="135" y="115" width="10" height="10" fill="#000000"/>
-        <rect x="85" y="135" width="10" height="10" fill="#000000"/>
-        <rect x="105" y="145" width="10" height="10" fill="#000000"/>
-        <rect x="145" y="135" width="10" height="10" fill="#000000"/>
-        <rect x="165" y="145" width="10" height="10" fill="#000000"/>
-
-        <rect x="95" y="165" width="10" height="10" fill="#000000"/>
-        <rect x="115" y="165" width="10" height="10" fill="#000000"/>
-        <rect x="145" y="165" width="10" height="10" fill="#000000"/>
-        <rect x="165" y="165" width="10" height="10" fill="#000000"/>
-      </svg>
-    `;
-  }
-
-  // -------------------------------------------------------------------
-  // Admin & Technician Modal Logic
-  // -------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Technician & Maintenance Admin Modal
+  // -------------------------------------------------------------------------
   btnAdminGear.addEventListener("click", () => {
     adminModal.style.display = "flex";
   });
@@ -832,7 +1050,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const res = await fetch("/api/kiosk/restock?sheets=500", { method: "POST" });
       if (res.ok) {
-        alert("Paper supply successfully reset to 500 sheets.");
+        alert("Paper supply restocked to 500 sheets!");
         fetchKioskStatus();
       }
     } catch (e) {
@@ -844,23 +1062,70 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const res = await fetch("/api/kiosk/toggle-mock", { method: "POST" });
       if (res.ok) {
-        const d = await res.json();
-        alert(`Mock Mode is now: ${d.mock_mode ? "ENABLED (Virtual Spooler)" : "DISABLED (Physical Hardware)"}`);
         fetchKioskStatus();
       }
     } catch (e) {
-      alert("Error toggling mock mode: " + e.message);
+      alert("Error toggling mock: " + e.message);
     }
   });
 
-  // Helpers
-  function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  // -------------------------------------------------------------------------
+  // Offline SVG QR Code Generator for Wi-Fi Screen
+  // -------------------------------------------------------------------------
+  function generateWifiQR() {
+    if (!wifiQrCode) return;
+    // Generate clean, high-contrast SVG representation
+    wifiQrCode.innerHTML = `
+      <svg viewBox="0 0 200 200" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+        <rect width="200" height="200" fill="#FFFFFF"/>
+        <!-- Top-Left Finder -->
+        <rect x="20" y="20" width="45" height="45" fill="#0F172A" rx="6"/>
+        <rect x="28" y="28" width="29" height="29" fill="#FFFFFF" rx="4"/>
+        <rect x="34" y="34" width="17" height="17" fill="#0F172A" rx="2"/>
+
+        <!-- Top-Right Finder -->
+        <rect x="135" y="20" width="45" height="45" fill="#0F172A" rx="6"/>
+        <rect x="143" y="28" width="29" height="29" fill="#FFFFFF" rx="4"/>
+        <rect x="149" y="34" width="17" height="17" fill="#0F172A" rx="2"/>
+
+        <!-- Bottom-Left Finder -->
+        <rect x="20" y="135" width="45" height="45" fill="#0F172A" rx="6"/>
+        <rect x="28" y="143" width="29" height="29" fill="#FFFFFF" rx="4"/>
+        <rect x="34" y="149" width="17" height="17" fill="#0F172A" rx="2"/>
+
+        <!-- Data Grid Modules -->
+        <rect x="75" y="25" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="95" y="25" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="115" y="25" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="75" y="45" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="105" y="45" width="12" height="12" fill="#0F172A" rx="2"/>
+
+        <rect x="25" y="75" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="45" y="85" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="65" y="75" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="85" y="85" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="105" y="75" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="125" y="85" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="145" y="75" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="165" y="85" width="12" height="12" fill="#0F172A" rx="2"/>
+
+        <rect x="75" y="105" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="95" y="115" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="115" y="105" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="135" y="115" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="155" y="105" width="12" height="12" fill="#0F172A" rx="2"/>
+
+        <rect x="75" y="135" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="95" y="145" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="115" y="135" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="135" y="155" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="155" y="135" width="12" height="12" fill="#0F172A" rx="2"/>
+        <rect x="165" y="155" width="12" height="12" fill="#0F172A" rx="2"/>
+      </svg>
+    `;
   }
 
-  function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 });

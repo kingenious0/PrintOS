@@ -2,18 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>PrintOS Kiosk Terminal — Self-Service Printing</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PrintOS Kiosk Terminal — Self-Service Campus Printing</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="kiosk.css">
+  <link rel="stylesheet" href="kiosk.css?v=32">
 </head>
 <body class="kiosk-body">
 
-  <!-- Main Kiosk Wrapper -->
+  <!-- Master Kiosk Shell -->
   <div class="kiosk-container">
 
     <!-- Top Status Bar -->
@@ -21,436 +21,561 @@
       <div class="header-left">
         <div class="kiosk-brand">
           <span class="brand-badge">Print<strong>OS</strong></span>
-          <span class="kiosk-id-tag" id="kiosk-name-tag">Kiosk #01 (Central Library)</span>
+          <span class="kiosk-id-tag" id="kiosk-name-tag">Kiosk #01 (Library Walkway)</span>
         </div>
       </div>
 
       <div class="header-right">
+        <!-- Station Status Badge -->
+        <div class="status-pill" id="station-status-pill">
+          <span class="status-dot"></span>
+          <span id="station-status-text">Ready</span>
+        </div>
+
         <!-- Paper Level Gauge -->
-        <div class="header-stat paper-gauge" id="paper-gauge-stat">
-          <div class="stat-icon">📄</div>
+        <div class="header-stat" id="paper-stat-box">
+          <span class="stat-icon">📄</span>
           <div class="stat-text">
-            <span class="stat-title">Paper Level</span>
-            <span class="stat-val" id="paper-level-val">480 / 500 sheets</span>
+            <span class="stat-title">Paper Meter</span>
+            <span class="stat-val" id="paper-level-val">490 / 500 sheets</span>
           </div>
           <div class="mini-progress-bar">
-            <div class="progress-fill" id="paper-progress-fill" style="width: 96%;"></div>
+            <div class="progress-fill" id="paper-progress-fill" style="width: 98%;"></div>
           </div>
         </div>
 
-        <!-- Printer Spooler Status -->
-        <div class="header-stat printer-status" id="printer-status-stat">
-          <div class="status-pulse-dot" id="printer-pulse-dot"></div>
-          <div class="stat-text">
-            <span class="stat-title">Printer</span>
-            <span class="stat-val" id="printer-state-text">Ready</span>
-          </div>
+        <!-- Inactivity Countdown Timer -->
+        <div class="inactivity-pill" id="session-timeout-pill">
+          <span>⏱️</span>
+          <span id="session-countdown-seconds">60s</span>
         </div>
 
-        <!-- Clock -->
+        <!-- Real-Time Clock -->
         <div class="kiosk-clock" id="kiosk-clock">12:00:00</div>
 
-        <!-- Admin Restock button (Touch friendly) -->
+        <!-- Technician Gear -->
         <button type="button" class="btn-admin-gear" id="btn-admin-gear" title="Technician Controls">⚙️</button>
       </div>
     </header>
 
-    <!-- Dynamic Screens Container -->
+    <!-- Dynamic Screen State Container -->
     <main class="kiosk-content-area">
 
-      <!-- ========================================== -->
-      <!-- VIEW 1: HOME / WELCOME SCREEN              -->
-      <!-- ========================================== -->
-      <section class="kiosk-view view-active" id="view-home">
-        <div class="home-hero">
-          <h1 class="welcome-heading">Welcome to <span>PrintOS</span></h1>
-          <p class="welcome-sub">Touch a card below to collect staged prints or upload directly.</p>
-        </div>
-
-        <div class="home-actions-grid">
-          <!-- Primary Action: Enter Code -->
-          <div class="action-card card-primary" id="card-action-collect">
-            <div class="card-icon-big">🔢</div>
-            <div class="card-info">
-              <h2>Collect Staged Job</h2>
-              <p>Enter the 6-digit pickup code from your phone PWA to pay and print in under 30 seconds.</p>
-            </div>
-            <div class="card-tap-cue">Tap to Enter Code &rarr;</div>
+      <!-- ==================================================================== -->
+      <!-- VIEW 1: HOME / ATTRACT SCREEN                                        -->
+      <!-- ==================================================================== -->
+      <section class="kiosk-view" id="view-home">
+        <div class="home-view-container">
+          
+          <div class="home-hero">
+            <div class="home-hero-badge">🟢 Instant Self-Service Printing Station</div>
+            <h1 class="welcome-heading">Welcome to <span>PrintOS</span></h1>
+            <p class="welcome-sub">Touch a card below to enter your pickup code, connect via phone, or plug in a flash drive.</p>
           </div>
 
-          <!-- Walk-in Action: Phone Upload -->
-          <div class="action-card card-secondary" id="card-action-phone">
-            <div class="card-icon-big">📶</div>
-            <div class="card-info">
-              <h2>Local Wi-Fi Upload</h2>
-              <p>Walk-in without prior staging. Connect to local kiosk Wi-Fi and beam files directly.</p>
+          <!-- 3 Large Vertical / Grid Action Cards -->
+          <div class="home-actions-grid">
+            
+            <!-- Action 1: Pickup Code -->
+            <div class="action-card card-primary" id="card-action-collect">
+              <div>
+                <div class="card-icon-bubble">🔢</div>
+                <div class="card-info">
+                  <h2>Enter Pickup Code</h2>
+                  <p>For documents already staged from your smartphone or hostel room. Print in under 30 seconds.</p>
+                </div>
+              </div>
+              <div class="card-tap-cue">Enter 6-Digit Code &rarr;</div>
             </div>
-            <div class="card-tap-cue">Upload from Phone &rarr;</div>
+
+            <!-- Action 2: Phone Upload -->
+            <div class="action-card card-secondary" id="card-action-phone">
+              <div>
+                <div class="card-icon-bubble">📱</div>
+                <div class="card-info">
+                  <h2>Print from Phone</h2>
+                  <p>Walk-in without prior staging. Connect to local offline Wi-Fi and transfer PDFs without internet data.</p>
+                </div>
+              </div>
+              <div class="card-tap-cue">Connect & Transfer &rarr;</div>
+            </div>
+
+            <!-- Action 3: USB Drive -->
+            <div class="action-card card-tertiary" id="card-action-usb">
+              <div>
+                <div class="card-icon-bubble">💾</div>
+                <div class="card-info">
+                  <h2>Print from USB Drive</h2>
+                  <p>Plug in your flash drive to browse files, customize copies and color options, and print immediately.</p>
+                </div>
+              </div>
+              <div class="card-tap-cue">Browse USB Files &rarr;</div>
+            </div>
+
           </div>
 
-          <!-- Secondary Action: USB Drive -->
-          <div class="action-card card-secondary" id="card-action-usb">
-            <div class="card-icon-big">💾</div>
-            <div class="card-info">
-              <h2>USB Drive Printing</h2>
-              <p>Plug your flash drive into the front USB port to browse and select PDF documents.</p>
+          <!-- Bottom Rates Banner -->
+          <div class="rates-banner">
+            <div class="rate-item">
+              <span class="rate-icon">⚫</span>
+              <div class="rate-text">
+                <strong>Black & White</strong>
+                <small>GH₵ 0.50 per sheet</small>
+              </div>
             </div>
-            <div class="card-tap-cue">Insert USB Drive &rarr;</div>
+            <div class="rate-divider"></div>
+            <div class="rate-item">
+              <span class="rate-icon">🎨</span>
+              <div class="rate-text">
+                <strong>Full Color</strong>
+                <small>GH₵ 1.00 per sheet</small>
+              </div>
+            </div>
+            <div class="rate-divider"></div>
+            <div class="rate-item">
+              <span class="rate-icon">📑</span>
+              <div class="rate-text">
+                <strong>Duplex (Double-Sided)</strong>
+                <small>Save 50% Paper & Cost</small>
+              </div>
+            </div>
+            <div class="rate-divider"></div>
+            <div class="rate-item">
+              <span class="rate-icon">📱</span>
+              <div class="rate-text">
+                <strong>Mobile Money Prompt</strong>
+                <small>MTN &bull; Telecel &bull; AT Money</small>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <!-- Quick Pricing Info Banner -->
-        <div class="rates-banner">
-          <div class="rate-item">
-            <span class="rate-icon">⚫</span>
-            <div>
-              <strong>Black & White</strong>
-              <small>GH₵ 0.50 per sheet</small>
-            </div>
-          </div>
-          <div class="rate-divider"></div>
-          <div class="rate-item">
-            <span class="rate-icon">🎨</span>
-            <div>
-              <strong>Full Color</strong>
-              <small>GH₵ 1.00 per sheet</small>
-            </div>
-          </div>
-          <div class="rate-divider"></div>
-          <div class="rate-item">
-            <span class="rate-icon">📱</span>
-            <div>
-              <strong>Instant MoMo Push</strong>
-              <small>MTN &bull; Telecel &bull; AT Money</small>
-            </div>
-          </div>
         </div>
       </section>
 
 
-      <!-- ========================================== -->
-      <!-- VIEW 2: NUMERIC KEYPAD PICKUP CODE ENTRY   -->
-      <!-- ========================================== -->
+      <!-- ==================================================================== -->
+      <!-- VIEW 2: ENTER PICKUP CODE SCREEN                                     -->
+      <!-- ==================================================================== -->
       <section class="kiosk-view" id="view-keypad" style="display: none;">
         <div class="view-header-bar">
-          <button type="button" class="btn-kiosk-back" id="btn-back-home">&larr; Return to Home</button>
-          <h2>Enter 6-Digit Pickup Code</h2>
-          <div class="placeholder-spacer"></div>
+          <div class="view-header-left">
+            <button type="button" class="btn-kiosk-back" id="btn-back-home">&larr; Back to Home</button>
+            <div class="view-title-wrap">
+              <h2>Enter 6-Digit Pickup Code</h2>
+              <p>Type the code displayed on your smartphone</p>
+            </div>
+          </div>
         </div>
 
-        <div class="keypad-layout">
-          <!-- Code Display Slots -->
-          <div class="code-entry-section">
-            <p class="code-prompt">Type the code displayed on your smartphone:</p>
+        <div class="keypad-container">
+          
+          <!-- Left: Digit Slots Display -->
+          <div class="keypad-left-col">
+            <p class="keypad-guidance">Enter the numbers shown in your confirmation card:</p>
             
-            <div class="digits-display-frame">
-              <div class="digit-box" id="slot-0">&bull;</div>
-              <div class="digit-box" id="slot-1">&bull;</div>
-              <div class="digit-box" id="slot-2">&bull;</div>
+            <!-- 6 Digit Slots: Displaying UNMASKED Numbers in Monospace (4 8 2 - 9 0 1) -->
+            <div class="digit-boxes-container">
+              <div class="digit-box" id="slot-0">&nbsp;</div>
+              <div class="digit-box" id="slot-1">&nbsp;</div>
+              <div class="digit-box" id="slot-2">&nbsp;</div>
               <div class="digit-separator">-</div>
-              <div class="digit-box" id="slot-3">&bull;</div>
-              <div class="digit-box" id="slot-4">&bull;</div>
-              <div class="digit-box" id="slot-5">&bull;</div>
+              <div class="digit-box" id="slot-3">&nbsp;</div>
+              <div class="digit-box" id="slot-4">&nbsp;</div>
+              <div class="digit-box" id="slot-5">&nbsp;</div>
             </div>
 
-            <div class="code-error-msg" id="keypad-error-msg" style="display: none;">
-              Invalid or expired pickup code. Please check and try again.
+            <!-- Instant Verification / Error Alert -->
+            <div class="keypad-feedback-box">
+              <div class="keypad-error-msg" id="keypad-error-msg" style="display: none;">
+                <span>⚠️</span>
+                <span id="keypad-error-text">Invalid code. Please check and try again.</span>
+              </div>
+              <div class="keypad-verifying-msg" id="keypad-verifying-msg" style="display: none;">
+                <span>⏳</span>
+                <span>Locating document & verifying kiosk hardware...</span>
+              </div>
             </div>
 
-            <div class="code-helper-tip">
-              💡 Example format: <strong>482 - 901</strong>. Staged jobs remain active for 24 hours.
+            <div class="keypad-hint-box">
+              <span>ℹ️</span>
+              <span>Codes remain valid for 24 hours. Your document is held safely in temporary buffer.</span>
             </div>
           </div>
 
-          <!-- Touch-Screen Virtual Numpad -->
-          <div class="virtual-numpad">
-            <button type="button" class="num-key" data-key="1">1</button>
-            <button type="button" class="num-key" data-key="2">2</button>
-            <button type="button" class="num-key" data-key="3">3</button>
+          <!-- Right: 3x4 On-Screen Keypad -->
+          <div class="keypad-right-col">
+            <div class="virtual-keypad-matrix">
+              <button type="button" class="num-key" data-key="1">1</button>
+              <button type="button" class="num-key" data-key="2">2</button>
+              <button type="button" class="num-key" data-key="3">3</button>
 
-            <button type="button" class="num-key" data-key="4">4</button>
-            <button type="button" class="num-key" data-key="5">5</button>
-            <button type="button" class="num-key" data-key="6">6</button>
+              <button type="button" class="num-key" data-key="4">4</button>
+              <button type="button" class="num-key" data-key="5">5</button>
+              <button type="button" class="num-key" data-key="6">6</button>
 
-            <button type="button" class="num-key" data-key="7">7</button>
-            <button type="button" class="num-key" data-key="8">8</button>
-            <button type="button" class="num-key" data-key="9">9</button>
+              <button type="button" class="num-key" data-key="7">7</button>
+              <button type="button" class="num-key" data-key="8">8</button>
+              <button type="button" class="num-key" data-key="9">9</button>
 
-            <button type="button" class="num-key key-clear" data-key="CLEAR">C</button>
-            <button type="button" class="num-key" data-key="0">0</button>
-            <button type="button" class="num-key key-backspace" data-key="BACKSPACE">⌫</button>
+              <button type="button" class="num-key key-clear" data-key="CLEAR">Clear</button>
+              <button type="button" class="num-key" data-key="0">0</button>
+              <button type="button" class="num-key key-backspace" data-key="BACKSPACE">⌫</button>
+            </div>
           </div>
+
         </div>
       </section>
 
 
-      <!-- ========================================== -->
-      <!-- VIEW 3: JOB SUMMARY & PRE-FLIGHT CHECK     -->
-      <!-- ========================================== -->
+      <!-- ==================================================================== -->
+      <!-- VIEW 3: USB FILE EXPLORER (BROWSER)                                  -->
+      <!-- ==================================================================== -->
+      <section class="kiosk-view" id="view-usb-browser" style="display: none;">
+        <div class="view-header-bar">
+          <div class="view-header-left">
+            <button type="button" class="btn-kiosk-back" id="btn-back-usb-home">&larr; Back to Home</button>
+            <div class="view-title-wrap">
+              <h2>USB Drive File Explorer</h2>
+              <p>Select a PDF document to configure your print options</p>
+            </div>
+          </div>
+          <div class="status-pill" id="usb-drive-status-badge">
+            <span class="status-dot"></span>
+            <span id="usb-drive-label-text">Scanning for USB...</span>
+          </div>
+        </div>
+
+        <div class="usb-main-layout">
+          
+          <!-- State A: Waiting for USB Insertion -->
+          <div class="usb-detecting-card" id="usb-waiting-view" style="display: flex;">
+            <div class="usb-pulse-hero">🔌</div>
+            <h3>Insert Your USB Flash Drive</h3>
+            <p>Please insert your flash drive into the front USB port below this touchscreen. PrintOS will detect it automatically and display your PDF documents.</p>
+            
+            <div class="usb-status-tag">
+              <span class="status-dot"></span>
+              <span>Actively monitoring USB ports in real time...</span>
+            </div>
+
+            <!-- Virtual Drive / Simulation option so user is never stuck -->
+            <div class="usb-sim-trigger-box">
+              <p>Testing on dev workstation or without a physical USB?</p>
+              <button type="button" class="btn-simulate-usb" id="btn-open-simulated-usb">
+                <span>📁</span>
+                <span>Open Simulated USB Drive (Sample Assignments)</span>
+              </button>
+              <input type="file" id="kiosk-usb-file-picker" accept="application/pdf" style="display: none;">
+            </div>
+          </div>
+
+          <!-- State B: Connected & Browsing Files -->
+          <div class="usb-browser-wrapper" id="usb-files-view" style="display: none;">
+            <div class="usb-browser-toolbar">
+              <div class="usb-path-badge" id="usb-breadcrumb">
+                <span>📁</span>
+                <span id="usb-path-text">USB Drive (D:)</span>
+              </div>
+              <div class="usb-toolbar-actions">
+                <button type="button" class="btn-toolbar" id="btn-usb-nav-up" style="display: none;">
+                  <span>⬆</span>
+                  <span>Up Folder</span>
+                </button>
+                <button type="button" class="btn-toolbar" id="btn-refresh-usb">
+                  <span>🔄</span>
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Scrollable File Rows -->
+            <div class="usb-file-list" id="usb-file-list">
+              <!-- Dynamically populated files -->
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+
+      <!-- ==================================================================== -->
+      <!-- VIEW 4: PRE-FLIGHT HEALTH & PAYMENT SCREEN                           -->
+      <!-- ==================================================================== -->
       <section class="kiosk-view" id="view-summary" style="display: none;">
         <div class="view-header-bar">
-          <button type="button" class="btn-kiosk-back" id="btn-back-keypad">&larr; Back to Code</button>
-          <h2>Document Ready for Release</h2>
-          <div class="code-tag-badge" id="summary-code-badge">CODE: 000-000</div>
+          <div class="view-header-left">
+            <button type="button" class="btn-kiosk-back" id="btn-back-summary">&larr; Back</button>
+            <div class="view-title-wrap">
+              <h2>Review Document & Release</h2>
+              <p>Hardware pre-flight check passed &bull; Ready for instant Mobile Money spooling</p>
+            </div>
+          </div>
+          <div class="kiosk-id-tag" id="summary-code-badge">PICKUP CODE: 000-000</div>
         </div>
 
-        <div class="summary-columns">
+        <div class="checkout-grid">
           
-          <!-- Column 1: Document Details -->
-          <div class="summary-panel doc-details-panel">
-            <h3 class="panel-heading">Document Specifications</h3>
-            
-            <div class="doc-icon-strip">
-              <div class="doc-icon-large">PDF</div>
-              <div class="doc-title-block">
-                <span class="doc-filename" id="sum-filename">lecture-notes.pdf</span>
-                <span class="doc-meta-sub" id="sum-filemeta">Uploaded remotely via Customer PWA</span>
-              </div>
-            </div>
+          <!-- Column 1: Specifications & Hardware Health -->
+          <div class="checkout-panel">
+            <div>
+              <h3>
+                <span>Document Details</span>
+                <button type="button" id="btn-edit-config" class="btn-toolbar" style="padding: 4px 12px; font-size: 13px; display: none;">Edit Options ✏️</button>
+              </h3>
 
-            <div class="details-table">
-              <div class="detail-row">
-                <span class="dk">Total Pages:</span>
-                <strong class="dv" id="sum-pages">4 pages</strong>
-              </div>
-              <div class="detail-row">
-                <span class="dk">Print Copies:</span>
-                <strong class="dv" id="sum-copies">1 copy</strong>
-              </div>
-              <div class="detail-row">
-                <span class="dk">Color Mode:</span>
-                <strong class="dv" id="sum-color">Black & White</strong>
-              </div>
-              <div class="detail-row">
-                <span class="dk">Layout:</span>
-                <strong class="dv" id="sum-duplex">Double-Sided (Duplex)</strong>
-              </div>
-              <div class="detail-row highlight-row">
-                <span class="dk">Physical Sheets Required:</span>
-                <strong class="dv dv-highlight" id="sum-sheets">2 sheets</strong>
-              </div>
-            </div>
-
-            <!-- Pre-Flight Health Check Results -->
-            <div class="preflight-box">
-              <div class="preflight-header">
-                <span class="preflight-title">Hardware Pre-Flight Status</span>
-                <span class="preflight-badge badge-pass" id="preflight-overall-badge">ALL SYSTEMS GO</span>
-              </div>
-              <div class="preflight-checks">
-                <div class="check-item" id="check-paper">
-                  <span class="check-icon">✓</span>
-                  <span class="check-label">Paper Available: <strong id="chk-paper-text">480 sheets (Need 2)</strong></span>
+              <div class="specs-table">
+                <div class="spec-line">
+                  <span class="spec-k">File Name:</span>
+                  <span class="spec-v" id="sum-filename">document.pdf</span>
                 </div>
-                <div class="check-item" id="check-printer">
-                  <span class="check-icon">✓</span>
-                  <span class="check-label">Printer Spooler: <strong id="chk-printer-text">Online & Ready</strong></span>
+                <div class="spec-line">
+                  <span class="spec-k">Total Document Pages:</span>
+                  <span class="spec-v" id="sum-pages">4 pages</span>
                 </div>
-                <div class="check-item" id="check-disk">
-                  <span class="check-icon">✓</span>
-                  <span class="check-label">Kiosk Buffer: <strong>Ready (> 50MB free)</strong></span>
+                <div class="spec-line">
+                  <span class="spec-k">Print Copies:</span>
+                  <span class="spec-v" id="sum-copies">1 copy</span>
+                </div>
+                <div class="spec-line">
+                  <span class="spec-k">Color Mode:</span>
+                  <span class="spec-v" id="sum-color">Black & White</span>
+                </div>
+                <div class="spec-line">
+                  <span class="spec-k">Layout:</span>
+                  <span class="spec-v" id="sum-duplex">Single-Sided</span>
+                </div>
+                <div class="spec-line highlight">
+                  <span class="spec-k">Physical Sheets Required:</span>
+                  <span class="spec-v" id="sum-sheets">4 sheets</span>
                 </div>
               </div>
             </div>
 
+            <!-- Hardware Pre-Flight Verification -->
+            <div class="preflight-health-box">
+              <div class="preflight-title-row">
+                <span>Hardware Pre-Flight Status</span>
+                <span class="preflight-badge-pass" id="preflight-overall-badge">All Systems Ready</span>
+              </div>
+              <div class="preflight-checklist">
+                <div class="check-item ok" id="chk-paper-item">
+                  <span class="check-icon">✓</span>
+                  <span>Paper Supply: <strong id="chk-paper-text">490 Available (Need 4)</strong></span>
+                </div>
+                <div class="check-item ok" id="chk-printer-item">
+                  <span class="check-icon">✓</span>
+                  <span>Spooler Hardware: <strong id="chk-printer-text">Online & Ready</strong></span>
+                </div>
+                <div class="check-item ok" id="chk-disk-item">
+                  <span class="check-icon">✓</span>
+                  <span>Secure Scratch Space: <strong>Ready (> 50MB)</strong></span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Column 2: Payment & Action -->
-          <div class="summary-panel payment-panel">
-            <h3 class="panel-heading">Payment Breakdown</h3>
+          <!-- Column 2: Payment Breakdown & MoMo Entry -->
+          <div class="checkout-panel">
+            <div>
+              <h3>
+                <span>Mobile Money Payment</span>
+                <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Instant USSD Push</span>
+              </h3>
 
-            <div class="price-hero-box">
-              <span class="price-hero-label">Amount Due</span>
-              <div class="price-hero-figure">
-                <span class="currency-symbol">GH₵</span>
-                <span class="amount-number" id="sum-total-price">1.00</span>
+              <div class="price-due-box">
+                <div class="price-due-label">Total Amount Due</div>
+                <div class="price-due-figure">GH₵ <span id="sum-total-price">2.00</span></div>
               </div>
-              <p class="momo-network-note">Charges via Mobile Money USSD Push Prompt</p>
+
+              <!-- MoMo Phone Input with On-Screen Keypad -->
+              <div class="phone-entry-section">
+                <label style="font-size: 14px; font-weight: 700; color: var(--text-secondary);">Confirm MoMo Number for USSD Prompt:</label>
+                <div class="phone-entry-display">
+                  <span class="phone-prefix">🇬🇭 +233</span>
+                  <span class="phone-digits" id="momo-phone-display">024 123 4567</span>
+                </div>
+
+                <!-- On-Screen Numeric Keypad for Phone Number Entry -->
+                <div class="mini-keypad-grid" id="momo-keypad-matrix">
+                  <button type="button" class="mini-num-key" data-momo="1">1</button>
+                  <button type="button" class="mini-num-key" data-momo="2">2</button>
+                  <button type="button" class="mini-num-key" data-momo="3">3</button>
+                  <button type="button" class="mini-num-key" data-momo="4">4</button>
+                  <button type="button" class="mini-num-key" data-momo="5">5</button>
+                  <button type="button" class="mini-num-key" data-momo="6">6</button>
+                  <button type="button" class="mini-num-key" data-momo="7">7</button>
+                  <button type="button" class="mini-num-key" data-momo="8">8</button>
+                  <button type="button" class="mini-num-key" data-momo="9">9</button>
+                  <button type="button" class="mini-num-key" data-momo="CLEAR" style="font-size: 14px; color: var(--rose);">Clear</button>
+                  <button type="button" class="mini-num-key" data-momo="0">0</button>
+                  <button type="button" class="mini-num-key" data-momo="BACK">⌫</button>
+                </div>
+              </div>
             </div>
 
-            <!-- Phone Verification for MoMo -->
-            <div class="momo-phone-box">
-              <label for="kiosk-momo-phone">Confirm Mobile Money Number:</label>
-              <div class="momo-input-wrapper">
-                <span class="prefix">🇬🇭 +233</span>
-                <input type="tel" id="kiosk-momo-phone" placeholder="024 123 4567" class="kiosk-phone-field">
-              </div>
-              <small>A prompt will pop up on this phone immediately upon tapping below.</small>
-            </div>
-
-            <!-- Action Button -->
-            <button type="button" class="btn-pay-print" id="btn-pay-print">
-              <span class="btn-pay-icon">💳</span>
-              <span class="btn-pay-text">Pay with MoMo & Print</span>
+            <!-- Pay & Print Button -->
+            <button type="button" class="btn-momo-pay-cta" id="btn-pay-print">
+              <span>💳</span>
+              <span id="btn-pay-text">Pay GH₵ 2.00 via Mobile Money & Print</span>
             </button>
-
-            <p class="kiosk-policy-note">
-              🔒 Safe & Unattended &bull; Auto-shredding active &bull; Bolted manual stapler on right
-            </p>
           </div>
 
         </div>
       </section>
 
 
-      <!-- ========================================== -->
-      <!-- VIEW 4: LIVE PRINT PIPELINE EXECUTION      -->
-      <!-- ========================================== -->
+      <!-- ==================================================================== -->
+      <!-- VIEW 5: LIVE PROCESSING & SPOOLING SCREEN                            -->
+      <!-- ==================================================================== -->
       <section class="kiosk-view" id="view-printing" style="display: none;">
-        <div class="printing-container">
+        <div class="processing-container">
           
-          <div class="print-animation-box">
-            <div class="printer-illustration">
-              <div class="paper-slot"></div>
-              <div class="animated-paper-feed" id="animated-paper-feed"></div>
-              <div class="printer-tray"></div>
+          <div class="processing-hero-icon" id="proc-icon">⚙️</div>
+          <h2 class="proc-headline" id="print-step-title">Hardware Pre-Flight Active</h2>
+          <p class="proc-subline" id="print-step-desc">Connecting to printer spooler and locking paper buffer...</p>
+
+          <!-- 4-Step Progress Stepper Timeline -->
+          <div class="timeline-stepper">
+            <div class="step-node active" id="pipe-step-1">
+              <div class="step-circle">1</div>
+              <span class="step-label">Health Check</span>
+            </div>
+            <div class="step-track-line" id="pipe-conn-1"></div>
+
+            <div class="step-node" id="pipe-step-2">
+              <div class="step-circle">2</div>
+              <span class="step-label">MoMo Approval</span>
+            </div>
+            <div class="step-track-line" id="pipe-conn-2"></div>
+
+            <div class="step-node" id="pipe-step-3">
+              <div class="step-circle">3</div>
+              <span class="step-label">Spooling File</span>
+            </div>
+            <div class="step-track-line" id="pipe-conn-3"></div>
+
+            <div class="step-node" id="pipe-step-4">
+              <div class="step-circle">4</div>
+              <span class="step-label">Printing Out</span>
             </div>
           </div>
 
-          <h2 class="print-headline" id="print-step-title">Verifying Hardware Pre-Flight...</h2>
-          <p class="print-subline" id="print-step-desc">Checking paper levels and spooler readiness.</p>
-
-          <!-- Stepper Process Tracker -->
-          <div class="pipeline-stepper">
-            <div class="pipe-step step-done" id="pipe-step-1">
-              <div class="pipe-circle">1</div>
-              <span class="pipe-name">Hardware Check</span>
+          <!-- Simulated USSD Notification Prompt Card -->
+          <div class="simulated-ussd-card" id="ussd-sim-card" style="display: none;">
+            <div class="ussd-card-header">
+              <span>📲</span>
+              <span>USSD Prompt Dispatched to Mobile Phone</span>
             </div>
-            <div class="pipe-connector" id="pipe-conn-1"></div>
-            
-            <div class="pipe-step step-active" id="pipe-step-2">
-              <div class="pipe-circle">2</div>
-              <span class="pipe-name">MoMo USSD Approval</span>
+            <div class="ussd-card-body" id="ussd-prompt-msg">
+              "Pay GH₵ 2.00 to PrintOS Station #01? Please approve on your phone..."
             </div>
-            <div class="pipe-connector" id="pipe-conn-2"></div>
-
-            <div class="pipe-step" id="pipe-step-3">
-              <div class="pipe-circle">3</div>
-              <span class="pipe-name">Spooling Document</span>
+            <div class="ussd-progress-track">
+              <div class="ussd-progress-fill" id="ussd-progress-fill"></div>
             </div>
-            <div class="pipe-connector" id="pipe-conn-3"></div>
-
-            <div class="pipe-step" id="pipe-step-4">
-              <div class="pipe-circle">4</div>
-              <span class="pipe-name">Printing & Paper Out</span>
-            </div>
-          </div>
-
-          <!-- USSD Interactive Phone Simulation Popup (Displays when waiting for MoMo) -->
-          <div class="ussd-sim-card" id="ussd-sim-card" style="display: none;">
-            <div class="ussd-header">
-              <span class="ussd-dot"></span>
-              <span>USSD Prompt Sent to Your Mobile Phone</span>
-            </div>
-            <p class="ussd-prompt-text">
-              "Pay GH₵ <span id="ussd-price-val">1.00</span> to PrintOS Kiosk #01? Approving via simulated gateway..."
-            </p>
-            <div class="ussd-countdown-bar"><div class="ussd-fill"></div></div>
-          </div>
-
-          <!-- Final Success Alert -->
-          <div class="print-success-box" id="print-success-box" style="display: none;">
-            <div class="success-check-big">✓</div>
-            <h3>Print Job Complete!</h3>
-            <p>Please collect your sheets from the collection tray below. Have a great day!</p>
-            <div class="auto-reset-tag">Returning to Home screen in <strong id="reset-seconds">8</strong>s...</div>
-            <button type="button" class="btn-finish-now" id="btn-finish-now">Finish Now</button>
           </div>
 
         </div>
       </section>
 
 
-      <!-- ========================================== -->
-      <!-- VIEW 5: LOCAL WI-FI DIRECT UPLOAD (WALK-IN)-->
-      <!-- ========================================== -->
+      <!-- ==================================================================== -->
+      <!-- VIEW 6: PRINT COMPLETION SCREEN                                      -->
+      <!-- ==================================================================== -->
+      <section class="kiosk-view" id="view-completion" style="display: none;">
+        <div class="complete-container">
+          
+          <div class="complete-check-hero">✓</div>
+          <h2 class="complete-headline">Print Job Complete!</h2>
+          <p class="complete-subline">Your pages have been spooled and printed successfully. Please collect your documents below.</p>
+
+          <div class="tray-collection-card">
+            <div class="tray-icon">📬</div>
+            <div class="tray-details">
+              <strong>Collect Sheets from Output Tray</strong>
+              <span>Heavy-duty manual stapler is bolted to the right bracket for your convenience.</span>
+            </div>
+          </div>
+
+          <div class="complete-actions">
+            <div class="reset-countdown-tag">
+              Auto-returning to Home in <strong id="reset-seconds">10</strong>s...
+            </div>
+            <button type="button" class="btn-done-reset" id="btn-finish-now">
+              <span>Finish & Reset Kiosk</span>
+              <span>&rarr;</span>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+
+      <!-- ==================================================================== -->
+      <!-- VIEW 7: LOCAL WI-FI DIRECT UPLOAD (WALK-IN)                          -->
+      <!-- ==================================================================== -->
       <section class="kiosk-view" id="view-wifi" style="display: none;">
         <div class="view-header-bar">
-          <button type="button" class="btn-kiosk-back" id="btn-back-wifi-home">&larr; Return to Home</button>
-          <h2>Walk-In Phone Upload (Zero Internet Data)</h2>
-          <div class="placeholder-spacer"></div>
+          <div class="view-header-left">
+            <button type="button" class="btn-kiosk-back" id="btn-back-wifi-home">&larr; Back to Home</button>
+            <div class="view-title-wrap">
+              <h2>Walk-In Phone Transfer (Zero Internet Data)</h2>
+              <p>Transfer documents locally from your smartphone without incurring cellular data charges</p>
+            </div>
+          </div>
+          <div class="status-pill">
+            <span class="status-dot"></span>
+            <span>Local Offline Hotspot</span>
+          </div>
         </div>
 
-        <div class="wifi-walkin-grid">
+        <div class="wifi-container-grid">
           
-          <div class="wifi-instructions-card">
-            <h3>How to Upload Over Local Wi-Fi:</h3>
-            
-            <div class="wifi-step">
-              <div class="step-num">1</div>
-              <div class="step-content">
-                <strong>Connect your phone to Kiosk Wi-Fi:</strong>
-                <p>SSID: <code id="wifi-ssid">PrintOS-Kiosk-01</code> &bull; Password: <code>printfree</code></p>
+          <div class="wifi-steps-card">
+            <div>
+              <div class="wifi-step-item">
+                <div class="wifi-step-num">1</div>
+                <div class="wifi-step-body">
+                  <strong>Connect Phone to Kiosk Wi-Fi:</strong>
+                  <p>Network SSID: <code id="wifi-ssid">PrintOS-Kiosk-01</code> &bull; Password: <code>printfree</code></p>
+                </div>
+              </div>
+
+              <div class="wifi-step-item">
+                <div class="wifi-step-num">2</div>
+                <div class="wifi-step-body">
+                  <strong>Scan QR Code or Open Web Browser:</strong>
+                  <p>Visit URL: <code id="wifi-url-display">http://192.168.1.100:8000/upload</code></p>
+                </div>
+              </div>
+
+              <div class="wifi-step-item">
+                <div class="wifi-step-num">3</div>
+                <div class="wifi-step-body">
+                  <strong>Select PDF and Generate Pickup Code:</strong>
+                  <p>Your document transfers to this kiosk buffer in seconds. Enter the 6-digit code on this screen.</p>
+                </div>
               </div>
             </div>
 
-            <div class="wifi-step">
-              <div class="step-num">2</div>
-              <div class="step-content">
-                <strong>Scan the QR code or open browser:</strong>
-                <p>Visit URL: <code id="wifi-url-display">http://192.168.1.100:8000/upload</code></p>
-              </div>
-            </div>
-
-            <div class="wifi-step">
-              <div class="step-num">3</div>
-              <div class="step-content">
-                <strong>Select your PDF and tap "Upload":</strong>
-                <p>The document transfers over local Wi-Fi in seconds without using mobile data!</p>
-              </div>
-            </div>
+            <button type="button" class="btn-kiosk-back" id="btn-wifi-to-keypad" style="align-self: flex-start;">
+              <span>I Have My Code &rarr;</span>
+            </button>
           </div>
 
           <div class="wifi-qr-card">
-            <div class="qr-canvas-container">
-              <!-- Dynamically generated SVG / QR -->
-              <div id="wifi-qr-code" class="qr-code-box"></div>
+            <div class="qr-frame">
+              <div id="wifi-qr-code" class="qr-code-svg-wrap"></div>
             </div>
-            <p class="qr-hint">Scan with your smartphone camera</p>
+            <p style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Point Camera at QR Code</p>
+            <p style="font-size: 13px; color: var(--text-secondary);">Direct connection to local staging web app</p>
           </div>
 
-        </div>
-      </section>
-
-      <!-- ========================================== -->
-      <!-- VIEW 6: USB DRIVE BROWSER & DETECTION     -->
-      <!-- ========================================== -->
-      <section class="kiosk-view" id="view-usb-browser" style="display: none;">
-        <div class="view-header-bar">
-          <button type="button" class="btn-kiosk-back" id="btn-back-usb-home">&larr; Return to Home</button>
-          <h2>USB Flash Drive Printing</h2>
-          <div class="code-tag-badge" id="usb-drive-status-badge">Detecting...</div>
-        </div>
-
-        <!-- State 1: No USB Inserted -->
-        <div class="usb-waiting-container" id="usb-waiting-view" style="display: flex;">
-          <div class="usb-pulse-icon">🔌</div>
-          <h3 class="usb-main-heading">No USB Drive Detected</h3>
-          <p class="usb-sub-heading">Please plug your USB flash drive into the front port below the screen.</p>
-          <div class="usb-scanning-badge">
-            <span class="status-pulse-dot"></span>
-            <span>Listening for USB insertion in real time...</span>
-          </div>
-          <p class="usb-kiosk-tip">The screen will automatically open your files the moment the flash drive is inserted.</p>
-        </div>
-
-        <!-- State 2: USB Inserted & File Browser -->
-        <div class="usb-browser-container" id="usb-files-view" style="display: none;">
-          <div class="usb-browser-toolbar">
-            <div class="usb-breadcrumb" id="usb-breadcrumb">📁 USB Drive (D:)</div>
-            <button type="button" class="btn-kiosk-back" id="btn-usb-nav-up" style="display: none; padding: 8px 16px; font-size: 14px;">⬆ Up One Folder</button>
-            <button type="button" class="btn-kiosk-back" id="btn-refresh-usb" style="padding: 8px 16px; font-size: 14px;">🔄 Refresh</button>
-          </div>
-
-          <div class="usb-file-list" id="usb-file-list">
-            <!-- Dynamically populated files -->
-          </div>
         </div>
       </section>
 
     </main>
 
-    <!-- Kiosk Footer Notification / Security Bar -->
+    <!-- Kiosk Footer Bar -->
     <footer class="kiosk-footer">
       <div class="footer-item">
         <span>🔒 Auto Document Shredding: <strong>Active</strong></span>
@@ -465,63 +590,181 @@
 
   </div>
 
-  <!-- Admin / Maintenance Modal -->
-  <div class="admin-modal-backdrop" id="admin-modal" style="display: none;">
+
+  <!-- ====================================================================== -->
+  <!-- DEDICATED PRINT CONFIGURATION MODAL / DRAWER (THE CRITICAL FIX)         -->
+  <!-- ====================================================================== -->
+  <div class="config-modal-backdrop" id="config-modal" style="display: none;">
+    <div class="config-modal-card">
+      
+      <!-- Modal Header -->
+      <div class="config-modal-header">
+        <h3>
+          <span>⚙️</span>
+          <span>Configure Print Options</span>
+        </h3>
+        <button type="button" class="btn-close-modal" id="btn-close-config" title="Close">&times;</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="config-modal-body">
+        
+        <!-- Selected File Banner -->
+        <div class="config-file-card">
+          <div class="config-file-badge">PDF</div>
+          <div class="config-file-details">
+            <div class="config-file-name" id="cfg-filename">document.pdf</div>
+            <div class="config-file-meta">
+              <span id="cfg-filesize">1.4 MB</span> &bull; 
+              <span class="usb-page-pill" id="cfg-pages">4 Pages Detected</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attribute 1: Copies Stepper -->
+        <div class="config-group">
+          <div class="config-label-row">
+            <span class="config-label-title">Number of Copies</span>
+            <span class="config-label-sub">Physical sets to print</span>
+          </div>
+          <div class="stepper-row">
+            <span style="font-weight: 700; font-size: 15px; color: var(--text-secondary);">Sets:</span>
+            <div class="stepper-controls">
+              <button type="button" class="btn-stepper" id="cfg-btn-minus">&minus;</button>
+              <span class="stepper-display" id="cfg-copies-val">1</span>
+              <button type="button" class="btn-stepper" id="cfg-btn-plus">&plus;</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attribute 2: Color Mode Selector (Large Pill Cards) -->
+        <div class="config-group">
+          <div class="config-label-row">
+            <span class="config-label-title">Color Mode</span>
+            <span class="config-label-sub">High contrast toner allocation</span>
+          </div>
+          <div class="pill-options-grid" id="cfg-color-options">
+            <div class="selectable-pill-card selected" data-color="BW">
+              <div class="pill-card-content">
+                <span class="pill-card-icon">⚫</span>
+                <div class="pill-card-text">
+                  <strong>Black & White</strong>
+                  <small>GH₵ 0.50 / sheet</small>
+                </div>
+              </div>
+              <div class="pill-check-indicator">✓</div>
+            </div>
+
+            <div class="selectable-pill-card" data-color="COLOR">
+              <div class="pill-card-content">
+                <span class="pill-card-icon">🎨</span>
+                <div class="pill-card-text">
+                  <strong>Full Color</strong>
+                  <small>GH₵ 1.00 / sheet</small>
+                </div>
+              </div>
+              <div class="pill-check-indicator">✓</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attribute 3: Page Layout Selector (Large Pill Cards) -->
+        <div class="config-group">
+          <div class="config-label-row">
+            <span class="config-label-title">Page Layout (Sides)</span>
+            <span class="config-label-sub">Duplex saves sheets & cost</span>
+          </div>
+          <div class="pill-options-grid" id="cfg-duplex-options">
+            <div class="selectable-pill-card selected" data-duplex="SIMPLEX">
+              <div class="pill-card-content">
+                <span class="pill-card-icon">📄</span>
+                <div class="pill-card-text">
+                  <strong>Single-Sided</strong>
+                  <small>1 sheet per page</small>
+                </div>
+              </div>
+              <div class="pill-check-indicator">✓</div>
+            </div>
+
+            <div class="selectable-pill-card" data-duplex="DUPLEX">
+              <div class="pill-card-content">
+                <span class="pill-card-icon">📑</span>
+                <div class="pill-card-text">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong>Double-Sided</strong>
+                    <span class="badge-tag-green">Save 50% Paper!</span>
+                  </div>
+                  <small>Duplex (Front & Back)</small>
+                </div>
+              </div>
+              <div class="pill-check-indicator">✓</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Persistent Sticky Bottom Action Bar inside Configuration Drawer -->
+      <div class="config-sticky-action-bar">
+        <div class="action-bar-summary">
+          <span class="action-bar-title">Calculated Total</span>
+          <div class="action-bar-figures">
+            <span id="cfg-summary-sheets">4 Sheets Required</span>
+            <span>&bull;</span>
+            <span class="cost-highlight" id="cfg-summary-price">GH₵ 2.00</span>
+          </div>
+        </div>
+        <button type="button" class="btn-continue-checkout" id="btn-cfg-continue">
+          <span>Continue to Payment</span>
+          <span>&rarr;</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ====================================================================== -->
+  <!-- ADMIN / MAINTENANCE CONSOLE MODAL                                      -->
+  <!-- ====================================================================== -->
+  <div class="config-modal-backdrop" id="admin-modal" style="display: none;">
     <div class="admin-modal-card">
       <div class="admin-header">
         <h3>🔧 Technician & Maintenance Console</h3>
-        <button type="button" class="btn-close-admin" id="btn-close-admin">&times;</button>
+        <button type="button" class="btn-close-modal" id="btn-close-admin">&times;</button>
       </div>
 
       <div class="admin-grid">
-        <div class="admin-control-box">
-          <h4>Paper Supply Restock</h4>
-          <p>Current: <strong id="admin-cur-paper">480 sheets</strong></p>
+        <div class="admin-box">
+          <div class="admin-box-info">
+            <strong>Paper Supply Level</strong>
+            <span id="admin-cur-paper">490 sheets remaining</span>
+          </div>
           <button type="button" class="btn-admin-act" id="btn-restock-500">Restock +500 Sheets</button>
         </div>
 
+        <div class="admin-box">
+          <div class="admin-box-info">
+            <strong>Virtual / Mock Spooler Mode</strong>
+            <span id="admin-mock-status">Active (Safe Laboratory Testing)</span>
+          </div>
+          <button type="button" class="btn-admin-act" id="btn-toggle-mock">Toggle Spooler</button>
+        </div>
+
+        <div class="admin-box">
+          <div class="admin-box-info">
+            <strong>Host IP & Local Endpoints</strong>
+            <span id="admin-host-ip">127.0.0.1:8000</span>
+          </div>
+          <div class="header-stat">
+            <span class="stat-icon">💾</span>
+            <span class="stat-val" id="admin-disk-free">Ready</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ========================================== -->
-  <!-- MODAL: USB INSERTION POPUP MESSAGE         -->
-  <!-- ========================================== -->
-  <div class="admin-modal-backdrop" id="usb-modal" style="display: none;">
-    <div class="admin-modal-card" style="max-width: 540px; text-align: center; border: 1px solid rgba(0, 242, 254, 0.4); box-shadow: 0 0 50px rgba(0, 242, 254, 0.2);">
-      <div class="admin-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 14px;">
-        <h3 style="display: flex; align-items: center; gap: 8px;">💾 USB Flash Drive Printing</h3>
-        <button type="button" class="btn-close-admin" id="btn-close-usb">&times;</button>
-      </div>
-
-      <div style="padding: 24px 16px 16px;">
-        <div style="font-size: 64px; margin-bottom: 16px; animation: usbPulse 1.8s infinite;">🔌</div>
-        <h3 style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 10px;">Please Insert Your USB Drive</h3>
-        <p style="color: var(--text-secondary); font-size: 15px; line-height: 1.6; margin-bottom: 22px;">
-          No USB drive detected yet. Please plug your flash drive into any USB port on the kiosk.<br/>
-          The system will <strong>automatically detect it and open your files</strong> immediately.
-        </p>
-
-        <div class="usb-scanning-badge" style="display: inline-flex; align-items: center; gap: 10px; background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.3); padding: 10px 22px; border-radius: 100px; color: var(--cyan-glow); font-size: 13px; font-weight: 700; margin-bottom: 24px;">
-          <span class="status-pulse-dot" style="background: var(--cyan-glow); box-shadow: 0 0 10px var(--cyan-glow);"></span>
-          <span id="usb-modal-status-text">Listening for USB flash drive in real time...</span>
-        </div>
-
-        <div style="border-top: 1px dashed rgba(255,255,255,0.12); padding-top: 18px; margin-top: 6px;">
-          <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;">Testing without a physical flash drive?</p>
-          <label for="usb-file-input" style="display: inline-block; background: rgba(255,255,255,0.08); border: 1px solid var(--kiosk-border); color: #fff; font-weight: 700; padding: 10px 22px; border-radius: 10px; cursor: pointer; font-size: 13px; transition: all 0.2s;">
-            📁 Simulate USB: Select PDF from Computer
-          </label>
-          <input type="file" id="usb-file-input" accept="application/pdf" style="display: none;">
-        </div>
-      </div>
-
-      <div style="padding: 12px 16px 20px; display: flex; justify-content: center;">
-        <button type="button" class="btn-kiosk-back" id="btn-cancel-usb" style="padding: 10px 26px; font-size: 14px;">Return to Home</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="kiosk.js?v=5"></script>
+  <script src="kiosk.js?v=7"></script>
 </body>
 </html>
