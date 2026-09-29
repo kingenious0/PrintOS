@@ -660,23 +660,28 @@ async def root_portal(request: Request):
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>PrintOS V1 - Commercial Kiosk & Staging Portal</title>
-      <link rel="preconnect" href="https://fonts.googleapis.com">
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+      <!-- Self-Hosted Offline Fonts (Zero CDN, 100% Offline-Proof) -->
+      <link rel="stylesheet" href="/kiosk/fonts.css?v=1">
       <style>
         :root {{
-          --bg-main: #F8FAFC;
-          --card-bg: #FFFFFF;
+          --kiosk-bg: #0D1115;
+          --kiosk-card: #161D22;
+          --kiosk-elevated: #1C232B;
+          --kiosk-inner: #242B32;
+          --border: rgba(255, 255, 255, 0.08);
+          --border-strong: rgba(255, 255, 255, 0.16);
           --primary: #2563EB;
           --primary-hover: #1D4ED8;
-          --emerald: #059669;
-          --text-primary: #0F172A;
-          --text-secondary: #475569;
-          --border: #E2E8F0;
+          --cyan-accent: #0284C7;
+          --emerald: #10B981;
+          --text-primary: #EFEFF1;
+          --text-secondary: #949599;
+          --text-muted: #64748B;
         }}
-        * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', sans-serif; }}
+        * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }}
         body {{
-          background-color: var(--bg-main);
+          background-color: var(--kiosk-bg);
+          background: radial-gradient(circle at 50% 0%, #161D22 0%, #0D1115 75%);
           color: var(--text-primary);
           min-height: 100vh;
           display: flex;
@@ -687,11 +692,11 @@ async def root_portal(request: Request):
         .portal-container {{
           max-width: 920px;
           width: 100%;
-          background: var(--card-bg);
+          background: var(--kiosk-card);
           border: 1px solid var(--border);
           border-radius: 28px;
           padding: 48px;
-          box-shadow: 0 10px 35px -5px rgba(15, 23, 42, 0.08);
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
         }}
         .header {{ text-align: center; margin-bottom: 40px; }}
         .badge {{
@@ -699,10 +704,10 @@ async def root_portal(request: Request):
           align-items: center;
           gap: 8px;
           padding: 6px 18px;
-          background: #EFF6FF;
-          border: 1px solid #BFDBFE;
+          background: rgba(37, 99, 235, 0.15);
+          border: 1px solid rgba(37, 99, 235, 0.35);
           border-radius: 100px;
-          color: var(--primary);
+          color: #60A5FA;
           font-size: 13px;
           font-weight: 700;
           letter-spacing: 0.8px;
@@ -714,10 +719,11 @@ async def root_portal(request: Request):
           height: 8px;
           background: var(--emerald);
           border-radius: 50%;
+          box-shadow: 0 0 10px var(--emerald);
         }}
-        h1 {{ font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }}
-        h1 span {{ color: var(--primary); }}
-        p.subtitle {{ color: var(--text-secondary); font-size: 17px; max-width: 600px; margin: 0 auto; line-height: 1.5; }}
+        h1 {{ font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; color: var(--text-primary); }}
+        h1 span {{ color: var(--primary); text-shadow: 0 0 20px rgba(37, 99, 235, 0.4); }}
+        p.subtitle {{ color: var(--text-secondary); font-size: 16px; max-width: 600px; margin: 0 auto; line-height: 1.6; }}
         .grid {{
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -725,8 +731,8 @@ async def root_portal(request: Request):
           margin-top: 36px;
         }}
         .portal-card {{
-          background: #FFFFFF;
-          border: 2px solid var(--border);
+          background: var(--kiosk-elevated);
+          border: 1px solid var(--border);
           border-radius: 20px;
           padding: 32px;
           text-decoration: none;
@@ -735,19 +741,20 @@ async def root_portal(request: Request):
           flex-direction: column;
           justify-content: space-between;
           transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
         }}
         .portal-card:hover {{
           transform: translateY(-3px);
-          border-color: var(--primary);
-          box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08);
+          background: var(--kiosk-inner);
+          border-color: rgba(37, 99, 235, 0.5);
+          box-shadow: 0 12px 30px rgba(37, 99, 235, 0.25);
         }}
         .card-icon {{
           width: 58px;
           height: 58px;
           border-radius: 16px;
-          background: #EFF6FF;
-          border: 1px solid #BFDBFE;
+          background: rgba(37, 99, 235, 0.15);
+          border: 1px solid rgba(37, 99, 235, 0.35);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -755,36 +762,36 @@ async def root_portal(request: Request):
           margin-bottom: 20px;
         }}
         .card-title {{ font-size: 22px; font-weight: 800; margin-bottom: 8px; color: var(--text-primary); }}
-        .card-desc {{ color: var(--text-secondary); font-size: 15px; line-height: 1.5; margin-bottom: 24px; }}
+        .card-desc {{ color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-bottom: 24px; }}
         .card-btn {{
           display: flex;
           align-items: center;
           gap: 8px;
           font-weight: 800;
           font-size: 15px;
-          color: var(--primary);
+          color: #60A5FA;
         }}
         .info-bar {{
           margin-top: 36px;
           padding: 16px 24px;
-          background: #F8FAFC;
+          background: var(--kiosk-elevated);
           border-radius: 16px;
           border: 1px solid var(--border);
           display: flex;
           flex-wrap: wrap;
           justify-content: space-between;
           align-items: center;
-          font-size: 14px;
+          font-size: 13px;
           color: var(--text-secondary);
         }}
         .info-item {{ display: flex; align-items: center; gap: 8px; }}
         .info-item code {{
           font-family: 'JetBrains Mono', monospace;
-          background: #FFFFFF;
+          background: var(--kiosk-inner);
           border: 1px solid var(--border);
           padding: 4px 10px;
           border-radius: 6px;
-          color: var(--primary);
+          color: #60A5FA;
           font-weight: 700;
         }}
       </style>

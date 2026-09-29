@@ -9,14 +9,12 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>PrintOS — Stage Your Campus Print Job</title>
   
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
+  <!-- Self-Hosted Offline Fonts (Zero CDN, 100% Offline-Proof) -->
+  <link rel="stylesheet" href="fonts.css?v=1">
+  <link rel="stylesheet" href="pwa.css?v=33">
   
-  <link rel="stylesheet" href="pwa.css?v=30">
-  
-  <!-- PDF-Lib for instant client-side page detection -->
-  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
+  <!-- Local Vendored PDF-Lib for instant client-side page detection (Offline-Proof) -->
+  <script src="vendor/pdf-lib.min.js"></script>
 </head>
 <body>
   
